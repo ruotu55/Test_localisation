@@ -1,12 +1,11 @@
 name: Check String Length in CSV
 
-# Only run this workflow when manually triggered
 on:
   workflow_dispatch:
 
 jobs:
   check_csv:
-    runs-on: ubuntu-22.04 # Specify the stable version of Ubuntu
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout the repository
