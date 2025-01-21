@@ -23,8 +23,14 @@ language_columns = {
     'Chinese (Traditional)': 15
 }
 
+# Initialize counters for passed and failed strings
+total_checked = 0
+total_passed = 0
+total_failed = 0
+
 # Function to check the string lengths in each language column
 def check_string_length():
+    global total_checked, total_passed, total_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
@@ -34,11 +40,28 @@ def check_string_length():
 
             for lang, index in language_columns.items():
                 text = row[index].strip()
-                if len(text) > 10:
+                total_checked += 1
+                if len(text) <= 10:
+                    total_passed += 1
+                else:
                     print(f"Error: String in {lang} is too long ({len(text)} characters): {text}")
-                    sys.exit(1)
+                    total_failed += 1
 
-    print("All strings are within the allowed length.")
+    # Print summary at the end of the check
+    print(f"Total strings checked: {total_checked}")
+    print(f"Total strings passed: {total_passed}")
+    print(f"Total strings failed: {total_failed}")
+
+    # Write summary output for GitHub Actions
+    with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary_file:
+        summary_file.write(f"## Summary of String Length Check\n")
+        summary_file.write(f"- Total strings checked: {total_checked}\n")
+        summary_file.write(f"- ✅ Strings passed: {total_passed}\n")
+        summary_file.write(f"- ❌ Strings failed: {total_failed}\n")
+
+    # Exit with an error code if any strings failed
+    if total_failed > 0:
+        sys.exit(1)
 
 if __name__ == "__main__":
     check_string_length()
