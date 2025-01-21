@@ -1,3 +1,5 @@
+name: Check String Length in CSV
+
 on:
   push:
     branches:
