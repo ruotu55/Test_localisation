@@ -36,11 +36,12 @@ def check_string_length():
             if len(row) < 16:
                 continue
 
+            prefix = row[0]
             row_passed = True
             for lang, index in language_columns.items():
                 text = row[index].strip()
                 if len(text) > 10:
-                    print(f"Error: String in {lang} is too long ({len(text)} characters): {text}")
+                    print(f"Error in '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}")
                     row_passed = False
 
             if row_passed:
