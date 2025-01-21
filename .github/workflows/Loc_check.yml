@@ -1,12 +1,8 @@
 name: Check String Length in CSV
 
+# Only run this workflow when manually triggered
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   check_csv:
