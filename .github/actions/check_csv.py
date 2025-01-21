@@ -1,5 +1,6 @@
 import csv
 import sys
+import os  # Make sure to import the os module
 
 # Path to the CSV file relative to the repository root
 csv_file = '.map-editor/locale/items.csv'
