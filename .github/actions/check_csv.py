@@ -40,4 +40,5 @@ def check_string_length():
 
     print("All strings are within the allowed length.")
 
-if __name__
+if __name__ == "__main__":
+    check_string_length()
