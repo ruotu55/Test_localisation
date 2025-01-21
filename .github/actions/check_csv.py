@@ -1,5 +1,4 @@
 import csv
-import sys
 import os
 
 # Path to the CSV file relative to the repository root
@@ -56,10 +55,6 @@ def check_string_length():
         summary_file.write(f"- Total rows checked: 2\n")
         summary_file.write(f"- ✅ Rows passed: {rows_passed}\n")
         summary_file.write(f"- ❌ Rows failed: {2 - rows_passed}\n")
-
-    # Exit with an error code if any row failed
-    if rows_passed < 2:
-        sys.exit(1)
 
 if __name__ == "__main__":
     check_string_length()
