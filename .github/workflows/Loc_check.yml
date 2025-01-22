@@ -2,6 +2,10 @@ name: Check String Length in CSV
 
 on:
   workflow_dispatch:
+    inputs:
+      event_name:
+        description: 'Event name prefix to check'
+        required: true
 
 jobs:
   check_csv:
@@ -18,4 +22,4 @@ jobs:
 
     - name: Check string length in CSV
       run: |
-        python .github/actions/check_csv.py
+        python .github/actions/check_csv.py ${{ github.event.inputs.event_name }}
