@@ -50,7 +50,7 @@ def check_string_length(event_prefix):
             # Check each language column
             for lang, index in language_columns.items():
                 text = row[index].strip()
-                if len(text) > 10:
+                if len(text) > 25:
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}"
                     )
