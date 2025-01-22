@@ -40,17 +40,17 @@ def check_empty_strings(event_prefix):
             if len(row) < 16:
                 continue
 
-            prefix = row[0]  # The prefix like '22120_tulips_i_flower_pink_name'
+            prefix = row[0]  # The prefix like '22120_tulips_i_tulip_shoe_name'
             if not prefix.startswith(event_prefix):
                 continue
 
             row_passed = True
             rows_checked += 1
 
-            # Check each language column
+            # Check each language column for an empty string
             for lang, index in language_columns.items():
                 text = row[index].strip()
-                if len(text) == 0:
+                if text == "":
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is empty"
                     )
