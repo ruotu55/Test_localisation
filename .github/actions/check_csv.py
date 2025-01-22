@@ -56,7 +56,7 @@ def check_string_length(event_prefix):
                 text = row[index].strip()
                 if len(text) > max_length:
                     error_message = (
-                        f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text} (maximum {max_length} characters allowed)"
+                        f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}"
                     )
                     print(error_message)
                     error_messages.append(error_message)
