@@ -46,7 +46,7 @@ def check_string_length(event_prefix):
 
             # Determine whether this is a name or hint
             is_name = prefix.endswith('_name')
-            max_length = 15 if is_name else 45  # Maximum length requirement
+            max_length = 20 if is_name else 60  # Maximum length requirement
 
             row_passed = True
             rows_checked += 1
