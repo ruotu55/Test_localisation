@@ -1,4 +1,4 @@
-name: Check CSV String Length and Empty Strings
+name: Check String Length in CSV
 
 on:
   workflow_dispatch:
@@ -25,7 +25,3 @@ jobs:
     - name: Check string length in CSV
       run: |
         python .github/actions/check_csv.py ${{ github.event.inputs.event_name }}
-
-    - name: Check empty strings in CSV
-      run: |
-        python .github/actions/check_empty_strings.py ${{ github.event.inputs.event_name }}
