@@ -30,7 +30,7 @@ rows_passed = 0
 rows_failed = 0
 error_messages = []
 
-# Function to check the string lengths in each language column for each row
+# Function to check string lengths in each language column for each row
 def check_string_length(event_prefix):
     global rows_checked, rows_passed, rows_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
@@ -44,15 +44,19 @@ def check_string_length(event_prefix):
             if not prefix.startswith(event_prefix):
                 continue
 
+            # Determine whether this is a name or hint
+            is_name = prefix.endswith('_name')
+            min_length = 15 if is_name else 45  # Minimum length requirement
+
             row_passed = True
             rows_checked += 1
 
             # Check each language column
             for lang, index in language_columns.items():
                 text = row[index].strip()
-                if len(text) > 25:
+                if len(text) < min_length:
                     error_message = (
-                        f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}"
+                        f"Error in prefix '{prefix}' ({lang}): String is too short ({len(text)} characters): {text} (minimum {min_length} characters required)"
                     )
                     print(error_message)
                     error_messages.append(error_message)
