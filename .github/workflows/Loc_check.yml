@@ -12,20 +12,17 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Authenticate to Google Cloud Storage
-        uses: google-github-actions/auth@v2
-        with:
-          create_credentials_file: true
-          workload_identity_provider: ${{ secrets.GCP_WIF_FI_CLIENT_PROVIDER }}
-          service_account: ${{ secrets.GCP_WIF_FI_CLIENT_QA_CLIENT_DEV_1 }}
-
     - name: Checkout the repository
       uses: actions/checkout@v4
       with:
-          persist-credentials: false
+        persist-credentials: false
+
+    - name: Authenticate to Google Cloud Storage
+      uses: google-github-actions/auth@v2
+      with:
+        create_credentials_file: true
+        workload_identity_provider: ${{ secrets.GCP_WIF_FI_CLIENT_PROVIDER }}
+        service_account: ${{ secrets.GCP_WIF_FI_CLIENT_QA_CLIENT_DEV_1 }}
 
     - name: Set up Python
       uses: actions/setup-python@v3
