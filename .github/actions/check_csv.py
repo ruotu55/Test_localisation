@@ -24,10 +24,11 @@ language_columns = {
     'Chinese (Traditional)': 15
 }
 
-# Initialize counters for passed rows
+# Initialize counters and error list
 rows_checked = 0
 rows_passed = 0
 rows_failed = 0
+error_messages = []
 
 # Function to check the string lengths in each language column for each row
 def check_string_length(event_prefix):
@@ -50,8 +51,11 @@ def check_string_length(event_prefix):
             for lang, index in language_columns.items():
                 text = row[index].strip()
                 if len(text) > 10:
-                    # Print detailed error with prefix, language, and string
-                    print(f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}")
+                    error_message = (
+                        f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text}"
+                    )
+                    print(error_message)
+                    error_messages.append(error_message)
                     row_passed = False
 
             if row_passed:
@@ -70,6 +74,9 @@ def check_string_length(event_prefix):
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
+        summary_file.write("\n### Errors:\n")
+        for error_message in error_messages:
+            summary_file.write(f"- {error_message}\n")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
