@@ -17,12 +17,6 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Authenticate to Google Cloud Storage
-      uses: google-github-actions/auth@v2
-      with:
-        create_credentials_file: true
-        workload_identity_provider: ${{ secrets.GCP_WIF_FI_CLIENT_PROVIDER }}
-
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
