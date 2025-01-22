@@ -46,7 +46,7 @@ def check_string_length(event_prefix):
 
             # Determine whether this is a name or hint
             is_name = prefix.endswith('_name')
-            min_length = 15 if is_name else 45  # Minimum length requirement
+            max_length = 15 if is_name else 45  # Maximum length requirement
 
             row_passed = True
             rows_checked += 1
@@ -54,9 +54,9 @@ def check_string_length(event_prefix):
             # Check each language column
             for lang, index in language_columns.items():
                 text = row[index].strip()
-                if len(text) < min_length:
+                if len(text) > max_length:
                     error_message = (
-                        f"Error in prefix '{prefix}' ({lang}): String is too short ({len(text)} characters): {text} (minimum {min_length} characters required)"
+                        f"Error in prefix '{prefix}' ({lang}): String is too long ({len(text)} characters): {text} (maximum {max_length} characters allowed)"
                     )
                     print(error_message)
                     error_messages.append(error_message)
