@@ -48,20 +48,21 @@ def check_empty_strings(event_prefix):
             rows_checked += 1
 
             # Check each language column for an empty string
+            row_errors = []
             for lang, index in language_columns.items():
                 text = row[index].strip()
                 if text == "":
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is empty"
                     )
-                    print(error_message)
-                    error_messages.append(error_message)
+                    row_errors.append(error_message)
                     row_passed = False
 
             if row_passed:
                 rows_passed += 1
             else:
                 rows_failed += 1
+                error_messages.extend(row_errors)  # Add all errors for this row
 
     # Print summary at the end of the check
     print(f"Total rows checked: {rows_checked}")
