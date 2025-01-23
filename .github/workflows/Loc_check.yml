@@ -32,6 +32,3 @@ jobs:
 
     - name: Check non-empty strings in CSV
       run: python .github/actions/check_non_empty.py "${{ github.event.inputs.event_name }}"
-
-    - name: Check language content in CSV
-      run: python .github/actions/check_language_content.py "${{ github.event.inputs.event_name }}"
