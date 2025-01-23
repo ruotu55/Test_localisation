@@ -29,7 +29,7 @@ language_columns = {
 
 # Group languages into broader categories
 language_groups = {
-    'European': ['en', 'fr', 'de', 'es', 'it', 'pt', 'pl', 'nl'],
+    'European': ['en', 'fr', 'de', 'es', 'it', 'pt', 'pl'],
     'Asian': ['ja', 'ko', 'zh-cn', 'zh-tw', 'th'],
     'Slavic': ['ru'],
     'Turkic': ['tr'],
@@ -69,9 +69,10 @@ def check_language_group(event_prefix):
                 text = row[index].strip()
                 if text:
                     detected_lang = detect(text)
-                    detected_group = lang_to_group.get(detected_lang)
-                    expected_group = lang_to_group.get(lang.split('-')[0])
-                    
+                    detected_group = lang_to_group.get(detected_lang, 'Unknown')
+                    # Map the display language to its group
+                    expected_group = lang_to_group.get(lang.lower(), 'Unknown')
+
                     if detected_group != expected_group:
                         error_message = (
                             f"Error in prefix '{prefix}' ({lang}): Detected language group '{detected_group}' does not match expected group '{expected_group}'"
