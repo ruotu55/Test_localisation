@@ -2,9 +2,12 @@ import csv
 import os
 import sys
 from langdetect import detect, DetectorFactory
+
 DetectorFactory.seed = 0  # Seed the random number generator for reproducibility
+
 # Path to the CSV file relative to the repository root
 csv_file = '.map-editor/locale/items.csv'
+
 # Define the indices of the languages in the CSV file
 language_columns = {
     'Russian': 1,
@@ -23,6 +26,7 @@ language_columns = {
     'Polish': 14,
     'Chinese (Traditional)': 15
 }
+
 # Initialize language detectors
 expected_languages = {
     'Russian': 'ru',
@@ -41,11 +45,13 @@ expected_languages = {
     'Polish': 'pl',
     'Chinese (Traditional)': 'zh-tw'
 }
+
 # Initialize counters and error list
 rows_checked = 0
 rows_passed = 0
 rows_failed = 0
 error_messages = []
+
 # Function to check if strings are in the correct language
 def check_language_content(event_prefix):
     global rows_checked, rows_passed, rows_failed
@@ -55,11 +61,14 @@ def check_language_content(event_prefix):
             # Skip rows that don't have enough columns
             if len(row) < 16:
                 continue
+
             prefix = row[0]
             if not prefix.startswith(event_prefix):
                 continue
+
             rows_checked += 1
             row_passed = True
+
             for lang, index in language_columns.items():
                 text = row[index].strip()
                 if text:
@@ -71,14 +80,17 @@ def check_language_content(event_prefix):
                         print(error_message)
                         error_messages.append(error_message)
                         row_passed = False
+
             if row_passed:
                 rows_passed += 1
             else:
                 rows_failed += 1
+
     # Print summary at the end of the check
     print(f"Total rows checked: {rows_checked}")
     print(f"Rows passed: {rows_passed}")
     print(f"Rows failed: {rows_failed}")
+
     # Write summary output for GitHub Actions
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
         summary_file.write(f"## Summary of Language Content Check\n")
@@ -88,10 +100,11 @@ def check_language_content(event_prefix):
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
-9:26
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_language_content.py <event_prefix>")
         sys.exit(1)
+
     event_prefix = sys.argv[1]
     check_language_content(event_prefix)
