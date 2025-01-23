@@ -8,7 +8,7 @@ on:
         required: true
 
 jobs:
-  check_string_length:
+  localization_check:
     runs-on: ubuntu-22.04
 
     steps:
@@ -30,25 +30,5 @@ jobs:
     - name: Check string length in CSV
       run: python .github/actions/check_csv.py "${{ github.event.inputs.event_name }}"
 
-  check_non_empty_strings:
-    runs-on: ubuntu-22.04
-    needs: check_string_length  # Ensure this job runs after check_string_length
-
-    steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
-    - name: Install dependencies (if any)
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        
     - name: Check non-empty strings in CSV
       run: python .github/actions/check_non_empty.py "${{ github.event.inputs.event_name }}"
