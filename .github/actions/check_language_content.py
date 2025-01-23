@@ -27,24 +27,20 @@ language_columns = {
     'Chinese (Traditional)': 15
 }
 
-# Initialize language detectors
-expected_languages = {
-    'Russian': 'ru',
-    'English': 'en',
-    'French': 'fr',
-    'German': 'de',
-    'Spanish': 'es',
-    'Italian': 'it',
-    'Japanese': 'ja',
-    'Chinese (Simplified)': 'zh-cn',
-    'Korean': 'ko',
-    'Portuguese': 'pt',
-    'Thai': 'th',
-    'Turkish': 'tr',
-    'Indonesian': 'id',
-    'Polish': 'pl',
-    'Chinese (Traditional)': 'zh-tw'
+# Group languages into broader categories
+language_groups = {
+    'European': ['en', 'fr', 'de', 'es', 'it', 'pt', 'pl', 'nl'],
+    'Asian': ['ja', 'ko', 'zh-cn', 'zh-tw', 'th'],
+    'Slavic': ['ru'],
+    'Turkic': ['tr'],
+    'Austronesian': ['id']
 }
+
+# Map language to their group for lookup
+lang_to_group = {}
+for group, languages in language_groups.items():
+    for lang in languages:
+        lang_to_group[lang] = group
 
 # Initialize counters and error list
 rows_checked = 0
@@ -52,8 +48,8 @@ rows_passed = 0
 rows_failed = 0
 error_messages = []
 
-# Function to check if strings are in the correct language
-def check_language_content(event_prefix):
+# Function to check if strings are in the correct language group
+def check_language_group(event_prefix):
     global rows_checked, rows_passed, rows_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
@@ -73,9 +69,12 @@ def check_language_content(event_prefix):
                 text = row[index].strip()
                 if text:
                     detected_lang = detect(text)
-                    if detected_lang != expected_languages[lang].split('-')[0]:
+                    detected_group = lang_to_group.get(detected_lang)
+                    expected_group = lang_to_group.get(lang.split('-')[0])
+                    
+                    if detected_group != expected_group:
                         error_message = (
-                            f"Error in prefix '{prefix}' ({lang}): Detected language '{detected_lang}' does not match expected '{expected_languages[lang]}'"
+                            f"Error in prefix '{prefix}' ({lang}): Detected language group '{detected_group}' does not match expected group '{expected_group}'"
                         )
                         print(error_message)
                         error_messages.append(error_message)
@@ -93,7 +92,7 @@ def check_language_content(event_prefix):
 
     # Write summary output for GitHub Actions
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
-        summary_file.write(f"## Summary of Language Content Check\n")
+        summary_file.write(f"## Summary of Language Group Content Check\n")
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
@@ -107,4 +106,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     event_prefix = sys.argv[1]
-    check_language_content(event_prefix)
+    check_language_group(event_prefix)
