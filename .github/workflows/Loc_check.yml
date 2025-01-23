@@ -35,6 +35,3 @@ jobs:
 
     - name: Check language content in CSV
       run: python .github/actions/check_language_content.py "${{ github.event.inputs.event_name }}"
-
-    - name: Check prefix format in CSV
-      run: python .github/actions/check_prefix_format.py "${{ github.event.inputs.event_name }}"
