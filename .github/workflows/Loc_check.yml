@@ -27,8 +27,8 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Check string length in CSV
-      run: python .github/actions/check_csv.py "${{ github.event.inputs.event_name }}"
-
-    - name: Check non-empty strings in CSV
-      run: python .github/actions/check_non_empty.py "${{ github.event.inputs.event_name }}"
+    - name: Check string length and non-empty strings in CSV
+      run: |
+        python .github/actions/check_csv.py "${{ github.event.inputs.event_name }}"
+        python .github/actions/check_non_empty.py "${{ github.event.inputs.event_name }}"
+      
