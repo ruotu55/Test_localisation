@@ -28,7 +28,7 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
 
-    - name: Run all Python actions in the actions
+    - name: Run all Python actions in the actions folder
       run: |
         for script in .github/actions/*.py; do
             python "$script" "${{ github.event.inputs.event_name }}"
