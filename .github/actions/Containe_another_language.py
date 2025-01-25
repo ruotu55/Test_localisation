@@ -1,6 +1,7 @@
 import csv
 import os
 import sys
+import re
 
 # Path to the CSV file relative to the repository root
 csv_file = '.map-editor/locale/items.csv'
@@ -24,47 +25,34 @@ language_columns = {
     'Chinese (Traditional)': 15
 }
 
-# Linguistic family definitions based on writing scripts
-linguistic_families = {
-    'Indo-European': ['Russian', 'English', 'French', 'German', 'Spanish', 'Italian', 'Portuguese', 'Polish', 'Turkish'],
-    'Sino-Tibetan': ['Chinese (Simplified)', 'Chinese (Traditional)'],
-    'Japonic': ['Japanese'],
-    'Koreanic': ['Korean'],
-    'Austronesian': ['Indonesian', 'Thai']
-}
-
 # Initialize counters and error list
 rows_checked = 0
+rows_passed = 0
 rows_failed = 0
 error_messages = []
 
-# Unicode ranges for each language family (as an example)
-unicode_ranges = {
-    'Russian': ('\u0400', '\u04FF'),  # Cyrillic
-    'English': ('\u0041', '\u007A'),  # Latin
-    'French': ('\u0041', '\u007A'),   # Latin
-    'German': ('\u0041', '\u007A'),   # Latin
-    'Spanish': ('\u0041', '\u007A'),  # Latin
-    'Italian': ('\u0041', '\u007A'),  # Latin
-    'Japanese': ('\u3040', '\u30FF'), # Hiragana + Katakana
-    'Chinese (Simplified)': ('\u4E00', '\u9FFF'),  # Han characters
-    'Chinese (Traditional)': ('\u4E00', '\u9FFF'), # Han characters
-    'Korean': ('\uAC00', '\uD7AF'),  # Hangul
-    'Portuguese': ('\u0041', '\u007A'),  # Latin
-    'Thai': ('\u0E00', '\u0E7F'),  # Thai script
-    'Turkish': ('\u0041', '\u007A'),  # Latin
-    'Indonesian': ('\u0041', '\u007A'),  # Latin
-    'Polish': ('\u0041', '\u007A'),  # Latin
+# Define character sets for each language (simplified for this example)
+language_character_sets = {
+    'English': re.compile(r'^[A-Za-z0-9 ]+$'),  # Only Latin characters, numbers, and spaces
+    'Russian': re.compile(r'^[А-Яа-яЁё0-9 ]+$'),  # Only Cyrillic characters and numbers
+    'French': re.compile(r'^[A-Za-zÀ-ÖØ-öø-ÿ0-9 ]+$'),  # Latin with French accents
+    'German': re.compile(r'^[A-Za-zÄäÖöÜüß0-9 ]+$'),  # Latin with German characters
+    'Spanish': re.compile(r'^[A-Za-zÁáÉéÍíÓóÚúÑñ0-9 ]+$'),  # Latin with Spanish accents
+    'Italian': re.compile(r'^[A-Za-zÀ-ÖØ-öø-ÿ0-9 ]+$'),  # Latin with Italian accents
+    'Japanese': re.compile(r'^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uFF66-\uFF9F]+$'),  # Hiragana, Katakana, Kanji
+    'Chinese (Simplified)': re.compile(r'^[\u4E00-\u9FFF]+$'),  # Simplified Chinese
+    'Chinese (Traditional)': re.compile(r'^[\u4E00-\u9FFF]+$'),  # Traditional Chinese
+    'Korean': re.compile(r'^[\uAC00-\uD7AF]+$'),  # Hangul characters
+    'Portuguese': re.compile(r'^[A-Za-zÀ-ÖØ-öø-ÿ0-9 ]+$'),  # Latin with Portuguese accents
+    'Thai': re.compile(r'^[\u0E00-\u0E7F]+$'),  # Thai characters
+    'Turkish': re.compile(r'^[A-Za-zÇçĞğİıÖöŞşÜü0-9 ]+$'),  # Turkish letters
+    'Indonesian': re.compile(r'^[A-Za-z0-9 ]+$'),  # Latin characters
+    'Polish': re.compile(r'^[A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż0-9 ]+$'),  # Latin with Polish accents
 }
 
-# Function to check if a character belongs to a specific range
-def is_char_in_range(char, language):
-    start, end = unicode_ranges.get(language, ('', ''))
-    return start <= char <= end
-
-# Function to check if one language's string contains another language's characters
-def check_language_containment(event_prefix):
-    global rows_checked, rows_failed
+# Function to check for invalid characters from other languages
+def check_invalid_characters(event_prefix):
+    global rows_checked, rows_passed, rows_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
@@ -76,49 +64,39 @@ def check_language_containment(event_prefix):
             if not prefix.startswith(event_prefix):
                 continue
 
+            row_passed = True
             rows_checked += 1
-            row_failed = False
 
-            # Get the text for each language and check families
-            language_text = {lang: row[index].strip() for lang, index in language_columns.items()}
+            # Check each language column for invalid characters
+            for lang, index in language_columns.items():
+                text = row[index].strip()
+                if not text:
+                    continue  # Skip empty text
 
-            # Check if one linguistic family's languages contain another linguistic family's characters
-            for family1, languages1 in linguistic_families.items():
-                for lang1 in languages1:
-                    text1 = language_text.get(lang1, '')
-                    for family2, languages2 in linguistic_families.items():
-                        if family1 != family2:  # Don't compare languages in the same family
-                            for lang2 in languages2:
-                                text2 = language_text.get(lang2, '')
-                                if text1 and text2:
-                                    # Check if any character from lang2 is in lang1's string
-                                    for char in text2:
-                                        if is_char_in_range(char, lang1):
-                                            error_message = (
-                                                f"Error in prefix '{prefix}': {lang2} contains characters from {lang1}."
-                                            )
-                                            print(error_message)
-                                            error_messages.append(error_message)
-                                            row_failed = True
-                                            break
-                                    if row_failed:
-                                        break
-                            if row_failed:
-                                break
-                    if row_failed:
-                        break
+                # Check if the text matches the expected character set for the language
+                if not language_character_sets[lang].match(text):
+                    error_message = (
+                        f"Error in prefix '{prefix}' ({lang}): Contains invalid characters."
+                    )
+                    print(error_message)
+                    error_messages.append(error_message)
+                    row_passed = False
 
-            if row_failed:
+            if row_passed:
+                rows_passed += 1
+            else:
                 rows_failed += 1
 
     # Print summary at the end of the check
     print(f"Total rows checked: {rows_checked}")
+    print(f"Rows passed: {rows_passed}")
     print(f"Rows failed: {rows_failed}")
 
     # Write summary output for GitHub Actions
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
-        summary_file.write(f"## Summary of Language Containment Check\n")
+        summary_file.write(f"## Summary of Invalid Characters Check\n")
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
+        summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
@@ -126,8 +104,8 @@ def check_language_containment(event_prefix):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python Contain_another_language.py <event_prefix>")
+        print("Usage: python check_invalid_characters.py <event_prefix>")
         sys.exit(1)
 
     event_prefix = sys.argv[1]
-    check_language_containment(event_prefix)
+    check_invalid_characters(event_prefix)
