@@ -84,13 +84,27 @@ def check_language_containment(event_prefix):
     print(f"Rows failed: {rows_failed}")
 
     # Write summary output for GitHub Actions
-    with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
-        summary_file.write(f"## Summary of Language Containment Check\n")
-        summary_file.write(f"- Total rows checked: {rows_checked}\n")
-        summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
-        summary_file.write("\n### Errors:\n")
-        for error_message in error_messages:
-            summary_file.write(f"- {error_message}\n")
+    write_summary()
+
+def write_summary():
+    # Check if the GITHUB_STEP_SUMMARY environment variable exists
+    summary_file_path = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not summary_file_path:
+        print("GitHub Actions summary file not found. Ensure that the environment variable GITHUB_STEP_SUMMARY is set.")
+        return
+
+    try:
+        # Write the summary content to the GitHub Actions summary file
+        with open(summary_file_path, 'w') as summary_file:
+            summary_file.write(f"## Summary of Language Containment Check\n")
+            summary_file.write(f"- Total rows checked: {rows_checked}\n")
+            summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
+            summary_file.write("\n### Errors:\n")
+            for error_message in error_messages:
+                summary_file.write(f"- {error_message}\n")
+        print("Summary written to GitHub Actions summary file.")
+    except Exception as e:
+        print(f"Failed to write to summary file: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
