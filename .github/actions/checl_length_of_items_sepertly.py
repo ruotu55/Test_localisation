@@ -27,7 +27,7 @@ language_columns = {
 # Define maximum string lengths per language
 language_max_lengths = {
     'Russian': {'name': 20, 'hint': 91},
-    'English': {'name': 30, 'hint': 90},
+    'English': {'name': 7, 'hint': 25},
     'French': {'name': 30, 'hint': 85},  
     'German': {'name': 25, 'hint': 90},  
     'Spanish': {'name': 28, 'hint': 95},  
