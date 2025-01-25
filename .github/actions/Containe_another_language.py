@@ -38,6 +38,30 @@ rows_checked = 0
 rows_failed = 0
 error_messages = []
 
+# Unicode ranges for each language family (as an example)
+unicode_ranges = {
+    'Russian': ('\u0400', '\u04FF'),  # Cyrillic
+    'English': ('\u0041', '\u007A'),  # Latin
+    'French': ('\u0041', '\u007A'),   # Latin
+    'German': ('\u0041', '\u007A'),   # Latin
+    'Spanish': ('\u0041', '\u007A'),  # Latin
+    'Italian': ('\u0041', '\u007A'),  # Latin
+    'Japanese': ('\u3040', '\u30FF'), # Hiragana + Katakana
+    'Chinese (Simplified)': ('\u4E00', '\u9FFF'),  # Han characters
+    'Chinese (Traditional)': ('\u4E00', '\u9FFF'), # Han characters
+    'Korean': ('\uAC00', '\uD7AF'),  # Hangul
+    'Portuguese': ('\u0041', '\u007A'),  # Latin
+    'Thai': ('\u0E00', '\u0E7F'),  # Thai script
+    'Turkish': ('\u0041', '\u007A'),  # Latin
+    'Indonesian': ('\u0041', '\u007A'),  # Latin
+    'Polish': ('\u0041', '\u007A'),  # Latin
+}
+
+# Function to check if a character belongs to a specific range
+def is_char_in_range(char, language):
+    start, end = unicode_ranges.get(language, ('', ''))
+    return start <= char <= end
+
 # Function to check if one language's string contains another language's characters
 def check_language_containment(event_prefix):
     global rows_checked, rows_failed
@@ -68,13 +92,21 @@ def check_language_containment(event_prefix):
                                 text2 = language_text.get(lang2, '')
                                 if text1 and text2:
                                     # Check if any character from lang2 is in lang1's string
-                                    if any(c in text1 for c in text2):
-                                        error_message = (
-                                            f"Error in prefix '{prefix}': {lang2} contains characters from {lang1}."
-                                        )
-                                        print(error_message)
-                                        error_messages.append(error_message)
-                                        row_failed = True
+                                    for char in text2:
+                                        if is_char_in_range(char, lang1):
+                                            error_message = (
+                                                f"Error in prefix '{prefix}': {lang2} contains characters from {lang1}."
+                                            )
+                                            print(error_message)
+                                            error_messages.append(error_message)
+                                            row_failed = True
+                                            break
+                                    if row_failed:
+                                        break
+                            if row_failed:
+                                break
+                    if row_failed:
+                        break
 
             if row_failed:
                 rows_failed += 1
