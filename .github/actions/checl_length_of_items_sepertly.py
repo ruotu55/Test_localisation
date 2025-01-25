@@ -28,19 +28,19 @@ language_columns = {
 language_max_lengths = {
     'Russian': {'name': 20, 'hint': 80},
     'English': {'name': 30, 'hint': 90},
-    'French': {'name': 30, 'hint': 85},  # Placeholder value, can be changed later
-    'German': {'name': 25, 'hint': 90},  # Placeholder value, can be changed later
-    'Spanish': {'name': 28, 'hint': 95},  # Placeholder value, can be changed later
-    'Italian': {'name': 22, 'hint': 88},  # Placeholder value, can be changed later
-    'Japanese': {'name': 20, 'hint': 80},  # Placeholder value, can be changed later
-    'Chinese (Simplified)': {'name': 25, 'hint': 85},  # Placeholder value, can be changed later
-    'Korean': {'name': 23, 'hint': 90},  # Placeholder value, can be changed later
-    'Portuguese': {'name': 30, 'hint': 95},  # Placeholder value, can be changed later
-    'Thai': {'name': 25, 'hint': 85},  # Placeholder value, can be changed later
-    'Turkish': {'name': 20, 'hint': 100},  # Placeholder value, can be changed later
-    'Indonesian': {'name': 24, 'hint': 95},  # Placeholder value, can be changed later
-    'Polish': {'name': 26, 'hint': 90},  # Placeholder value, can be changed later
-    'Chinese (Traditional)': {'name': 20, 'hint': 80},  # Placeholder value, can be changed later
+    'French': {'name': 30, 'hint': 85},  
+    'German': {'name': 25, 'hint': 90},  
+    'Spanish': {'name': 28, 'hint': 95},  
+    'Italian': {'name': 22, 'hint': 88},  
+    'Japanese': {'name': 20, 'hint': 80},  
+    'Chinese (Simplified)': {'name': 25, 'hint': 85},
+    'Korean': {'name': 23, 'hint': 90},  
+    'Portuguese': {'name': 30, 'hint': 95},
+    'Thai': {'name': 25, 'hint': 85},  
+    'Turkish': {'name': 20, 'hint': 100}, 
+    'Indonesian': {'name': 24, 'hint': 95}, 
+    'Polish': {'name': 26, 'hint': 90},  
+    'Chinese (Traditional)': {'name': 20, 'hint': 80}, 
 }
 
 # Initialize counters and error list
