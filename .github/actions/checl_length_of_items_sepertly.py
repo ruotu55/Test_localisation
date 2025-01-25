@@ -40,7 +40,7 @@ language_max_lengths = {
     'Turkish': {'name': 20, 'hint': 100}, 
     'Indonesian': {'name': 24, 'hint': 95}, 
     'Polish': {'name': 26, 'hint': 90},  
-    'Chinese (Traditional)': {'name': 20, 'hint': 80}, 
+    'Chinese (Traditional)': {'name': 5, 'hint': 11}, 
 }
 
 # Initialize counters and error list
