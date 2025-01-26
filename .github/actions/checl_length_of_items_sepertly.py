@@ -26,21 +26,21 @@ language_columns = {
 
 # Define maximum string lengths per language
 language_max_lengths = {
-    'Russian': {'name': 15, 'hint': 910},
-    'English': {'name': 700, 'hint': 250},
-    'French': {'name': 300, 'hint': 850},  
-    'German': {'name': 205, 'hint': 900},  
-    'Spanish': {'name': 208, 'hint': 950},  
-    'Italian': {'name': 202, 'hint': 880},  
-    'Japanese': {'name': 200, 'hint': 800},  
+    'Russian': {'name': 20, 'hint': 910},
+    'English': {'name': 20, 'hint': 250},
+    'French': {'name': 20, 'hint': 850},  
+    'German': {'name': 20, 'hint': 900},  
+    'Spanish': {'name': 20, 'hint': 950},  
+    'Italian': {'name': 20, 'hint': 880},  
+    'Japanese': {'name': 20, 'hint': 800},  
     'Chinese (Simplified)': {'name': 250, 'hint': 850},
-    'Korean': {'name': 230, 'hint': 900},  
-    'Portuguese': {'name': 300, 'hint': 950},
-    'Thai': {'name': 205, 'hint': 805},  
-    'Turkish': {'name': 200, 'hint': 1000}, 
-    'Indonesian': {'name': 204, 'hint': 905}, 
-    'Polish': {'name': 206, 'hint': 900},  
-    'Chinese (Traditional)': {'name': 500, 'hint': 101}, 
+    'Korean': {'name': 23, 'hint': 900},  
+    'Portuguese': {'name': 20, 'hint': 950},
+    'Thai': {'name': 20, 'hint': 805},  
+    'Turkish': {'name': 20, 'hint': 1000}, 
+    'Indonesian': {'name': 20, 'hint': 905}, 
+    'Polish': {'name': 20, 'hint': 900},  
+    'Chinese (Traditional)': {'name': 20, 'hint': 101}, 
 }
 
 # Initialize counters and error list
