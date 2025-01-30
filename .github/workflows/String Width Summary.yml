@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       input_string:
-        description: 'String to calculate width'
+        description: 'String to calculate visual width'
         required: true
         default: 'Hello, World!'
 
@@ -16,9 +16,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install wcwidth package
+      run: pip install wcwidth
+
     - name: Run width calculation
       id: calculate_width
       run: python .github/actions/calculate_width.py "${{ github.event.inputs.input_string }}"
 
     - name: Display summary
-      run: echo ${{ steps.calculate_width.outputs.summary }}
+      run: echo "Total visual width of the string is: ${{ steps.calculate_width.outputs.summary }}"
