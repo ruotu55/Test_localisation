@@ -1,0 +1,32 @@
+name: String Width Summary
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_string:
+        description: 'Enter the string to summarize'
+        required: true
+        type: string
+
+jobs:
+  calculate_width:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install necessary dependencies
+      run: python -m pip install --upgrade pip
+
+    - name: Run string width calculation script
+      run: python actions/calculate_width.py "${{ github.event.inputs.input_string }}"
+
+    - name: Summarize string width
+      id: summarize_width
+      run: echo "The width of the input string is $(cat width_output.txt)"
