@@ -4,32 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       input_string:
-        description: 'Enter the string to summarize'
+        description: 'String to calculate width'
         required: true
-        type: string
+        default: 'Hello, World!'
 
 jobs:
-  calculate_width:
+  calculate-width:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-
-    - name: Install necessary dependencies
-      run: python -m pip install --upgrade pip
-
-    - name: List directory contents
-      run: ls -R .github/actions
-
-    - name: Run string width calculation script
+    - name: Run width calculation
+      id: calculate_width
       run: python .github/actions/calculate_width.py "${{ github.event.inputs.input_string }}"
 
-    - name: Summarize string width
-      id: summarize_width
-      run: echo "The width of the input string is $(cat width_output.txt)"
+    - name: Display summary
+      run: echo ${{ steps.calculate_width.outputs.summary }}
