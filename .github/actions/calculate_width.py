@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 from wcwidth import wcwidth
 
@@ -19,6 +20,7 @@ def main():
     input_string = sys.argv[1]
     total_width = calculate_width(input_string)
     
+    print(f"::set-output name=total_width::{total_width}")
     print(f"Total visual width of the string is: {total_width} columns")
 
 if __name__ == "__main__":
