@@ -26,7 +26,9 @@ jobs:
 
     - name: Run width calculation
       id: calculate_width
-      run: python .github/actions/calculate_width.py "${{ github.event.inputs.input_string }}"
+      run: |
+        total_width=$(python .github/actions/calculate_width.py "${{ github.event.inputs.input_string }}")
+        echo "::set-output name=total_width::$total_width"
 
     - name: Display summary
-      run: echo "Total visual width of the string is: ${{ steps.calculate_width.outputs.summary }}"
+      run: echo "Total visual width of the string is: ${{ steps.calculate_width.outputs.total_width }} columns"
