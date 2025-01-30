@@ -1,14 +1,15 @@
 import sys
+from wcwidth import wcwidth
 
 def calculate_width(input_string):
-    width_summary = {}
+    total_width = 0
     for char in input_string:
-        char_width = len(char.encode('utf-8'))  # Calculate the width in bytes
-        if char_width in width_summary:
-            width_summary[char_width] += 1
-        else:
-            width_summary[char_width] = 1
-    return width_summary
+        char_width = wcwidth(char)
+        if char_width == -1:
+            print(f"Warning: Character {char} is not printable, skipping.")
+            continue
+        total_width += char_width
+    return total_width
 
 def main():
     if len(sys.argv) < 2:
@@ -16,11 +17,9 @@ def main():
         sys.exit(1)
 
     input_string = sys.argv[1]
-    width_summary = calculate_width(input_string)
+    total_width = calculate_width(input_string)
     
-    print("Character Width Summary:")
-    for width, count in width_summary.items():
-        print(f"Width {width}: {count} characters")
+    print(f"Total visual width of the string is: {total_width} columns")
 
 if __name__ == "__main__":
     main()
