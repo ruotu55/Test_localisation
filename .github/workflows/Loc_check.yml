@@ -27,9 +27,11 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+    - name: Install DejaVu font
+      run: sudo apt-get install -y fonts-dejavu-core
 
     - name: Run all Python actions in the actions folder
       run: |
         for script in .github/actions/*.py; do
             python "$script" "${{ github.event.inputs.event_name }}"
-          done
+        done
