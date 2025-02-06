@@ -4,10 +4,11 @@ from PIL import ImageFont, ImageDraw, Image
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=12):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
-    # Create a dummy image and get the size of the text
+    # Create a dummy image and get the bounding box of the text
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
-    width, _ = draw.textsize(text, font=font)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0]  # Calculate width from the bounding box
     return width
 
 def main(event_name):
