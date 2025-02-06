@@ -1,7 +1,7 @@
 import sys
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=12):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
     # Create a dummy image and get the bounding box of the text
