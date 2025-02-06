@@ -1,13 +1,12 @@
 import sys
-from wcwidth import wcwidth, wcswidth
+from wcwidth import wcswidth
 
 def get_display_width(s):
-    # Calculate the display width of the string
     return wcswidth(s)
 
 def main(event_name):
     display_width = get_display_width(event_name)
-    print(f"The width of the event name '{event_name}' is: {display_width}")
+    print(f"The display width of the event name '{event_name}' is: {display_width}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
