@@ -15,8 +15,18 @@ def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
     font_size = 10  # Font size
     try:
-        display_width = get_text_pixel_width(event_name, font_path, font_size)
-        print(f"The pixel width of the event name '{event_name}' is: {display_width}")
+        words = event_name.split()
+
+        # Calculate width for each word
+        word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
+        total_width = sum(word_widths.values())
+
+        # Print out the widths
+        for word, width in word_widths.items():
+            print(f"The pixel width of the word '{word}' is: {width}")
+        
+        print(f"\nThe total pixel width of the event name '{event_name}' is: {total_width}")
+        
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
 
