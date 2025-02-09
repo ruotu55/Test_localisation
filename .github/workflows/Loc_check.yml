@@ -33,3 +33,7 @@ jobs:
       - name: Run Pixel Length Full Check
         run: |
           python .github/actions/Pixel_length_full.py "${{ github.event.inputs.event_name }}"
+
+      - name: Run Check Width
+        run: |
+          python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
