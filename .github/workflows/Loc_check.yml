@@ -30,17 +30,8 @@ jobs:
     - name: Install DejaVu font
       run: sudo apt-get install -y fonts-dejavu-core
 
-    - name: Run Pixel Length Check
-      id: pixel_length_check
-      run: python .github/actions/Pixel_length_full.py "${{ github.event.inputs.event_name }}"
-
-    - name: Upload Summary
-      if: failure()
-      uses: actions/upload-artifact@latest
-      with:
-        name: summary-log
-        path: ${{ github.step_summary }}
-
-    - name: Output Summary
-      if: failure()
-      run: cat ${{ github.step_summary }}
+    - name: Run all Python actions in the actions folder
+      run: |
+        for script in .github/actions/*.py; do
+            python "$script" "${{ github.event.inputs.event_name }}"
+        done
