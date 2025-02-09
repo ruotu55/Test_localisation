@@ -34,13 +34,14 @@ def check_if_text_fits_in_two_lines(text, font_path='/usr/share/fonts/truetype/d
     line_count = 1
     for word in words:
         word_width = get_text_pixel_width(word, font_path=font_path, font_size=font_size)
+        space_width = get_text_pixel_width(' ', font_path=font_path, font_size=font_size)
         if current_line_width + word_width <= max_line_pixel_width:
-            current_line_width += word_width + get_text_pixel_width(' ', font_path=font_path, font_size=font_size)  # Adding space width
+            current_line_width += word_width + space_width
         else:
             line_count += 1
             if line_count > 2:
                 return False
-            current_line_width = word_width + get_text_pixel_width(' ', font_path=font_path, font_size=font_size)  # Starting new line
+            current_line_width = word_width + space_width
     return True
 rows_checked = 0
 rows_passed = 0
@@ -85,10 +86,9 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
     print(f"Rows failed: {rows_failed}")
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
         summary_file.write(f"## Summary of String and Pixel Length Checks\n")
-12:12
-summary_file.write(f"- Total rows checked: {rows_checked}\n")
+        summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
-        summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
+summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
