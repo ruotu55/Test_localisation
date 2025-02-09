@@ -89,8 +89,8 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
         summary_file.write(f"## Summary of String and Pixel Length Checks\n")
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
-summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
-        summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
+        summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
+summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
