@@ -36,11 +36,11 @@ jobs:
 
     - name: Upload Summary
       if: failure()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: summary-log
         path: ${{ github.step_summary }}
-      
+
     - name: Output Summary
       if: failure()
       run: cat ${{ github.step_summary }}
