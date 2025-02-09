@@ -1,5 +1,4 @@
-name: Localization Check
-
+name: Check_length
 on:
   workflow_dispatch:
     inputs:
