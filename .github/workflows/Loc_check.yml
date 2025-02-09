@@ -31,10 +31,7 @@ jobs:
         run: sudo apt-get install -y fonts-dejavu-core
 
       - name: Run Pixel_box_final
-        run: |
-          python .github/actions/Pixel_box_final.py "${{ github.event.inputs.event_name }}"
-          :bulb:*_Please be aware that Moon Acttive now offer the Gemini Advanced Assistant, and we encourage you to start using it (Make sure you are using your Moon Active account)._*
+        run: python .github/actions/Pixel_box_final.py "${{ github.event.inputs.event_name }}"
 
       - name: Run Check Width
-        run: |
-          python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
+        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
