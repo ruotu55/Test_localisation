@@ -21,10 +21,21 @@ def main(event_name):
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
         total_width = sum(word_widths.values())
 
-        # Print out the widths
+        # Output for each word's width
         for word, width in word_widths.items():
-            print(f"The pixel width of the word '{word}' is: {width}")
+            print(f"• The pixel width of the word '{word}' is: {width}")
         
+        # Summary
+        print("\nSummary of String and Pixel Length Checks")
+        print(f"• Total words checked: {len(words)}")
+        # Assuming a threshold to determine pass/fail
+        THRESHOLD = 50  # Example threshold for pixel width of each word, adjust as needed
+        passed = sum(1 for width in word_widths.values() if width <= THRESHOLD)
+        failed = len(words) - passed
+        print(f"• :white_check_mark: Words passed: {passed}")
+        print(f"• :x: Words failed: {failed}")
+        print(f"Errors: {'None' if failed == 0 else 'Some words exceed the threshold width'}")
+
         print(f"\nThe total pixel width of the event name '{event_name}' is: {total_width}")
         
     except IOError:
