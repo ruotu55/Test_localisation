@@ -90,7 +90,8 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
             summary_file.write(f"- {error_message}\n")
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python check_pixel_length.py <event_prefix>")
-sys.exit(1)
+
+print("Usage: python check_pixel_length.py <event_prefix>")
+        sys.exit(1)
     event_prefix = sys.argv[1]
     check_strings_and_pixel_length(event_prefix)
