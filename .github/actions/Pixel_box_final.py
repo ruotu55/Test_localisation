@@ -37,7 +37,7 @@ def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu
         word_width = get_text_pixel_width(word, font_path=font_path, font_size=font_size)
         if current_line_width + word_width + (space_width if current_line else 0) <= max_line_pixel_width:
             current_line.append(word)
-            current_line_width += word_width + ((space_width if current_line else 0))
+            current_line_width += word_width + (space_width if current_line else 0)
         else:
             lines.append(current_line)
             current_line = [word]
@@ -88,10 +88,10 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
     print(f"Rows failed: {rows_failed}")
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
         summary_file.write(f"## Summary of String and Pixel Length Checks\n")
-summary_file.write(f"- Total rows checked: {rows_checked}\n")
+        summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
-        summary_file.write("\n### Errors:\n")
+summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
 if __name__ == "__main__":
