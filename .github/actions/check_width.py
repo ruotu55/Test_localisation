@@ -1,4 +1,5 @@
 import sys
+import os
 from PIL import ImageFont, ImageDraw, Image
 
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
@@ -11,7 +12,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     width = bbox[2] - bbox[0]  # Calculate width from the bounding box
     return width
 
-def main(event_name, summary_path):
+def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
     font_size = 10  # Font size
     try:
@@ -21,26 +22,26 @@ def main(event_name, summary_path):
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
         total_width = sum(word_widths.values())
 
-        summary = []
-        
-        # Collect widths to summary
+        # Prepare the summary text
+        summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name}' is as follows:\n\n"
         for word, width in word_widths.items():
-            summary.append(f"The pixel width of the word '{word}' is: {width}")
+            summary_text += f"The pixel width of the word '{word}' is: {width}\n"
+        summary_text += f"\nThe total pixel width of the event name '{event_name}' is: {total_width}\n"
 
-        summary.append(f"\nThe total pixel width of the event name '{event_name}' is: {total_width}")
-        
-        # Save summary to the specified file
-        with open(summary_path, 'w') as f:
-            f.write("\n".join(summary))
+        # Write the summary to the file specified by GITHUB_STEP_SUMMARY
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+            summary_file.write(summary_text)
+
+        # Print summary to console as well (optional)
+        print(summary_text)
 
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python check_width.py <event_name> <summary_file_path>")
+    if len(sys.argv) != 2:
+        print("Usage: python check_width.py <event_name>")
         sys.exit(1)
 
     event_name = sys.argv[1]
-    summary_path = sys.argv[2]
-    main(event_name, summary_path)
+    main(event_name)
