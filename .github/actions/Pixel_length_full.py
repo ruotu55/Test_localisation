@@ -54,6 +54,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is empty."
                     )
+                    print(error_message)
                     error_messages.append(error_message)
                     row_passed = False
                 else:
@@ -62,27 +63,25 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                         error_message = (
                             f"Error in prefix '{prefix}' ({lang}): Pixel width ({pixel_width}) exceeds 200."
                         )
+                        print(error_message)
                         error_messages.append(error_message)
                         row_passed = False
             if row_passed:
                 rows_passed += 1
             else:
                 rows_failed += 1
-    summary = f"## Summary of String and Pixel Length Checks\n"
-    summary += f"- Total rows checked: {rows_checked}\n"
-    summary += f"- :white_check_mark: Rows passed: {rows_passed}\n"
-    summary += f"- :x: Rows failed: {rows_failed}\n"
-    summary += "\n### Errors:\n"
-    for error_message in error_messages:
-        summary += f"- {error_message}\n"
+    print(f"Total rows checked: {rows_checked}")
+    print(f"Rows passed: {rows_passed}")
+    print(f"Rows failed: {rows_failed}")
     # Write summary output for GitHub Actions
-    summary_file_path = os.environ.get('GITHUB_STEP_SUMMARY', None)
-    if summary_file_path:
-        with open(summary_file_path, 'w') as summary_file:
-            summary_file.write(summary)
-    else:
-print("GITHUB_STEP_SUMMARY environment variable is not set.")
-        print(summary)
+    with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+        summary_file.write(f"## Summary of String and Pixel Length Checks\n")
+        summary_file.write(f"- Total rows checked: {rows_checked}\n")
+        summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
+        summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
+        summary_file.write("\n### Errors:\n")
+        for error_message in error_messages:
+            summary_file.write(f"- {error_message}\n")
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_pixel_length.py <event_prefix>")
