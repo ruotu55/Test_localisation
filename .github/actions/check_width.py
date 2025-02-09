@@ -13,7 +13,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
 
 def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
-    font_size = 12  # Font size
+    font_size = 10  # Font size
     try:
         display_width = get_text_pixel_width(event_name, font_path, font_size)
         print(f"The pixel width of the event name '{event_name}' is: {display_width}")
