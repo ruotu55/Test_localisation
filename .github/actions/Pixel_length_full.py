@@ -47,7 +47,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                 continue
             row_passed = True
             rows_checked += 1
-            # Check each language column
+            # Check each language column and determine max pixel width based on suffix
             for lang, index in language_columns.items():
                 text = row[index].strip()
                 if not text:
@@ -58,10 +58,16 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                     error_messages.append(error_message)
                     row_passed = False
                 else:
+                    if prefix.endswith('_hint'):
+                        max_pixel_width = 300
+                    elif prefix.endswith('_name'):
+                        max_pixel_width = 100
+                    else:
+                        max_pixel_width = 200  # Default maximum width
                     pixel_width = get_text_pixel_width(text, font_path, font_size)
-                    if pixel_width > 200:
+                    if pixel_width > max_pixel_width:
                         error_message = (
-                            f"Error in prefix '{prefix}' ({lang}): Pixel width ({pixel_width}) exceeds 200."
+                            f"Error in prefix '{prefix}' ({lang}): Pixel width ({pixel_width}) exceeds {max_pixel_width}."
                         )
                         print(error_message)
                         error_messages.append(error_message)
@@ -82,6 +88,8 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_pixel_length.py <event_prefix>")
