@@ -36,7 +36,7 @@ jobs:
 
     - name: Upload Summary
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@latest
       with:
         name: summary-log
         path: ${{ github.step_summary }}
