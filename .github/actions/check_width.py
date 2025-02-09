@@ -46,4 +46,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     event_name = sys.argv[1]
-    main(event_name
+    main(event_name)
