@@ -63,7 +63,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
             row_passed = True
             rows_checked += 1
             for lang, index in language_columns.items():
-                text = row[index].strip()
+                text = row[index].strip().upper()  # Convert to UPPER CASE
                 if not text:
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is empty."
