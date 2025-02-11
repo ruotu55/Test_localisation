@@ -3,13 +3,11 @@ import os
 from PIL import ImageFont, ImageDraw, Image
 
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
-    # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
-    # Create a dummy image and get the bounding box of the text
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
     bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0]  # Calculate width from the bounding box
+    width = float(bbox[2] - bbox[0])  # Calculate width from the bounding box and convert to float
     return width
 
 def main(event_name):
@@ -23,13 +21,18 @@ def main(event_name):
 
         # Calculate total width including spaces
         total_width_including_spaces = get_text_pixel_width(event_name, font_path, font_size)
+        
+        # Precision for floating point representation
+        precision = 1
 
         # Prepare the summary text
-        summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name}' including spaces is as follows:\n\n"
+        summary_text = (f"The pixel width of the words and the total pixel width of the event name '{event_name}' "
+                        f"including spaces is as follows:\n\n")
         for word, width in word_widths.items():
-            summary_text += f"The pixel width of the word '{word}' is: {width}\n"
-        summary_text += f"\nThe total pixel width of the event name '{event_name}' including spaces is: {total_width_including_spaces}\n"
-
+            summary_text += f"The pixel width of the word '{word}' is: {round(width, precision)}\n"
+        summary_text += (f"\nThe total pixel width of the event name '{event_name}' including spaces is: "
+                         f"{round(total_width_including_spaces, precision)}\n")
+        
         # Write the summary to the file specified by GITHUB_STEP_SUMMARY
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
