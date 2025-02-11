@@ -2,28 +2,29 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
-    font = ImageFont.truetype(font_path, font_size)
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, scale=10):
+    scaled_font_size = int(font_size * scale)
+    font = ImageFont.truetype(font_path, scaled_font_size)
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
     bbox = draw.textbbox((0, 0), text, font=font)
-    width = float(bbox[2] - bbox[0])  # Calculate width from the bounding box and convert to float
+    width = (bbox[2] - bbox[0]) / scale  # Scale down the width to the original size
     return width
 
 def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
     font_size = 10  # Font size
+    scale = 10     # Scale factor for increased precision
     try:
         words = event_name.split()
 
         # Calculate width for each word
-        word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
+        word_widths = {word: get_text_pixel_width(word, font_path, font_size, scale) for word in words}
 
         # Calculate total width including spaces
-        total_width_including_spaces = get_text_pixel_width(event_name, font_path, font_size)
+        total_width_including_spaces = get_text_pixel_width(event_name, font_path, font_size, scale)
         
-        # Precision for floating point representation
-        precision = 1
+        precision = 2  # Increased precision for floating point representation
 
         # Prepare the summary text
         summary_text = (f"The pixel width of the words and the total pixel width of the event name '{event_name}' "
@@ -34,7 +35,7 @@ def main(event_name):
                          f"{round(total_width_including_spaces, precision)}\n")
         
         # Write the summary to the file specified by GITHUB_STEP_SUMMARY
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file:
             summary_file.write(summary_text)
 
         # Print summary to console as well (optional)
