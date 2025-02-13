@@ -28,8 +28,8 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     width = bbox[2] - bbox[0]
     return width
 def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, max_line_pixel_width=100):
-    font = ImageFont.truetype(font_path, font_size)
     space_width = get_text_pixel_width(' ', font_path=font_path, font_size=font_size)
+    print(f"Text: '{text}'")
     lines = []
     current_line = []
     current_line_width = 0
@@ -38,13 +38,17 @@ def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu
         if current_line_width + word_width + (space_width if current_line else 0) <= max_line_pixel_width:
             current_line.append(word)
             current_line_width += word_width + (space_width if current_line else 0)
+            print(f"Adding '{word}', current line width: {current_line_width}")
         else:
             lines.append(current_line)
             current_line = [word]
             current_line_width = word_width
+            print(f"Moving to next line with '{word}', current line width: {current_line_width}")
         if len(lines) + 1 > 2:  # As we only allow 2 lines
+            print("Exceeds two lines, returning False")
             return False
     lines.append(current_line)
+    print(f"Final lines: {lines}\n")
     return len(lines) <= 2
 rows_checked = 0
 rows_passed = 0
@@ -72,7 +76,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                     error_messages.append(error_message)
                     row_passed = False
                 else:
-                    if not does_text_fit_in_two_lines(text, font_path, font_size):
+if not does_text_fit_in_two_lines(text, font_path, font_size):
                         error_message = (
                             f"Error in prefix '{prefix}' ({lang}): Text exceeds 2 lines within pixel width limit."
                         )
