@@ -91,12 +91,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
-
-
-
-
-11:56
-summary_file.write("\n### Errors:\n")
+        summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
 if __name__ == "__main__":
@@ -105,3 +100,8 @@ if __name__ == "__main__":
         sys.exit(1)
     event_prefix = sys.argv[1]
     check_strings_and_pixel_length(event_prefix)
+
+
+
+
+
