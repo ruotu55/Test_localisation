@@ -1,8 +1,7 @@
 import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
-
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
     # Create a dummy image and get the bounding box of the text
@@ -11,14 +10,12 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/noto/NotoSan
     bbox = draw.textbbox((0, 0), text, font=font)
     width = bbox[2] - bbox[0]  # Calculate width from the bounding box
     return width
-
 def main(event_name):
-    font_path = '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf'  # Path to the NotoSans truetype font file
+    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
     font_size = 10  # Font size
     try:
         # Convert event_name to upper case
         event_name_upper = event_name.upper()
-
         words = event_name_upper.split()
         # Calculate width for each word
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
@@ -36,7 +33,6 @@ def main(event_name):
         print(summary_text)
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
-
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_width.py <event_name>")
