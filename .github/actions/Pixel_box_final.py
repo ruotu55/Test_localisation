@@ -63,7 +63,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
             row_passed = True
             rows_checked += 1
             for lang, index in language_columns.items():
-                text = row[index].strip().upper()  # Convert to UPPER CASE
+                text = row[index].strip()
                 if not text:
                     error_message = (
                         f"Error in prefix '{prefix}' ({lang}): String is empty."
@@ -91,7 +91,12 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
         summary_file.write(f"- Total rows checked: {rows_checked}\n")
         summary_file.write(f"- :white_check_mark: Rows passed: {rows_passed}\n")
         summary_file.write(f"- :x: Rows failed: {rows_failed}\n")
-        summary_file.write("\n### Errors:\n")
+
+
+
+
+11:56
+summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
 if __name__ == "__main__":
