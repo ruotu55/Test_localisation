@@ -74,7 +74,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
                 else:
                     if not does_text_fit_in_two_lines(text, font_path, font_size):
                         error_message = (
-                            f"Error in prefix '{prefix}' ({lang}): Text exceeds 2 lines within pixel width limit."
+                            f"Error in prefix '{prefix}' ({lang}): Text exceeds 2 lines within pixel width limit. Text: '{text}'"
                         )
                         print(error_message)
                         error_messages.append(error_message)
