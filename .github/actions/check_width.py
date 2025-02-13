@@ -2,7 +2,7 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/path/to/NotoSans-Regular.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='NotoSans-Regular.ttf', font_size=10):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
     # Create a dummy image and get the bounding box of the text
@@ -13,7 +13,7 @@ def get_text_pixel_width(text, font_path='/path/to/NotoSans-Regular.ttf', font_s
     return width
 
 def main(event_name):
-    font_path = '/path/to/NotoSans-Regular.ttf'  # Path to the NotoSans truetype font file
+    font_path = 'NotoSans-Regular.ttf'  # Path to the NotoSans truetype font file
     font_size = 10  # Font size
     try:
         words = event_name.split()
