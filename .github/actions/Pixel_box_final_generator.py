@@ -16,7 +16,7 @@ def generate_word(font_path, font_size):
     letters = string.ascii_lowercase
     length = random.randint(1, 10)  # Vary the length of words
     word = ''.join(random.choice(letters) for _ in range(length))
-    return word
+    return word.capitalize()  # Capitalize the first letter of each word
 
 def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=1000):
     space_width = get_text_pixel_width(' ', font_path, font_size)
