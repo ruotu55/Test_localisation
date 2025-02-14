@@ -2,7 +2,7 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/msttcorefonts/Arial.ttf', font_size=10):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
     # Create a dummy image and get the bounding box of the text
@@ -14,7 +14,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
 
 def main(event_name):
     event_name_upper = event_name.upper()  # Convert the event name to upper case
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
+    font_path = '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf'  # Path to the Arial truetype font file
     font_size = 15  # Font size
     try:
         words = event_name_upper.split()
