@@ -1,4 +1,3 @@
-pip install langdetect
 import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
