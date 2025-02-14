@@ -14,7 +14,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
 
 def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
-    font_size = 5  # Font size
+    font_size = 15  # Font size
     try:
         words = event_name.split()
         # Calculate width for each word
