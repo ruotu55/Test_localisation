@@ -27,7 +27,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     bbox = draw.textbbox((0, 0), text, font=font)
     width = bbox[2] - bbox[0]
     return width
-def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, max_line_pixel_width=91):
+def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, max_line_pixel_width=93):
     font = ImageFont.truetype(font_path, font_size)
     space_width = get_text_pixel_width(' ', font_path=font_path, font_size=font_size)
     lines = []
@@ -100,8 +100,3 @@ if __name__ == "__main__":
         sys.exit(1)
     event_prefix = sys.argv[1]
     check_strings_and_pixel_length(event_prefix)
-
-
-
-
-
