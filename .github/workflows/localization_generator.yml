@@ -1,4 +1,4 @@
-name: Localization Check
+name: String generator
 
 on:
   workflow_dispatch:
