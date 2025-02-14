@@ -6,14 +6,19 @@ def get_text_pixel_width(text, font_path, font_size=10):
     try:
         font = ImageFont.truetype(font_path, font_size)
     except IOError:
-        print(f"Font file '{font_path}' not found.  Arial may not be installed or the path is incorrect. Using default DejaVuSans")
+        print(f"Font file '{font_path}' not found. Using default DejaVuSans")
         font_path_default = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-        font = ImageFont.truetype(font_path_default, font_size) # Fallback to DejaVuSans
-    image = Image.new('RGB', (1, 1))
-    draw = ImageDraw.Draw(image)
-    bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0]
-    return width
+        font = ImageFont.truetype(font_path_default, font_size)
+
+    total_width = 0
+    for char in text:  # Iterate over each character
+        image = Image.new('RGB', (1, 1))
+        draw = ImageDraw.Draw(image)
+        bbox = draw.textbbox((0, 0), char, font=font)
+        width = bbox[2] - bbox[0]
+        total_width += width
+    return total_width
+
 
 def main(event_name):
     event_name_upper = event_name.upper()
@@ -24,6 +29,7 @@ def main(event_name):
         words = event_name_upper.split()
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
         total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path, font_size)
+
 
         summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
