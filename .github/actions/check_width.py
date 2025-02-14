@@ -42,6 +42,6 @@ def main(event_name):
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_width.py <event_name>")
-sys.exit(1)
+        sys.exit(1)
     event_name = sys.argv[1]
     main(event_name)
