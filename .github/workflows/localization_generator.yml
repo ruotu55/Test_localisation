@@ -1,34 +1,63 @@
-name: String Generator
+import os
+import sys
+import random
+import string
+from PIL import ImageFont, ImageDraw, Image
 
-on:
-  workflow_dispatch:
-    inputs:
-      desired_width:
-        description: 'Desired width of each generated word in pixels'
-        required: true
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+    font = ImageFont.truetype(font_path, font_size)
+    image = Image.new('RGB', (1, 1))
+    draw = ImageDraw.Draw(image)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0]
+    return width
 
-jobs:
-  localization_check:
-    runs-on: ubuntu-22.04
+def generate_random_word_with_width(desired_width, font_path, font_size, max_attempts=1000):
+    letters = string.ascii_lowercase
+    avg_char_width = get_text_pixel_width('a', font_path, font_size)
+    approx_length = desired_width // avg_char_width
 
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+    for _ in range(max_attempts):
+        word = ''.join(random.choice(letters) for _ in range(approx_length))
+        word_width = get_text_pixel_width(word, font_path, font_size)
+        if word_width == desired_width:
+            return word
+        elif word_width > desired_width:
+            reduced_length = int(len(word) * desired_width / word_width)
+            word = word[:reduced_length]
+            if get_text_pixel_width(word, font_path, font_size) == desired_width:
+                return word
+    
+    return None  # Return None if unable to find word of desired width within max_attempts
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
+def main(desired_width):
+    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    font_size = 10
+    try:
+        desired_width = int(desired_width)
+        words = []
+        for _ in range(50):
+            word = generate_random_word_with_width(desired_width, font_path, font_size)
+            if word:
+                words.append(word)
+            else:
+                print(f"Unable to generate a word with width {desired_width} pixels.")
+                break
+        
+        summary_text = f"Generated {len(words)} words with the width of {desired_width} pixels:\n\n"
+        for word in words:
+            summary_text += f"{word}\n"
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+            summary_file.write(summary_text)
+        print(summary_text)
+    except IOError:
+        print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
+    except ValueError:
+        print("Please provide a valid integer for the desired width.")
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Install DejaVu font
-        run: sudo apt-get install -y fonts-dejavu-core
-
-      - name: Run Pixel_box_final_generator
-        run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.desired_width }}"
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python Pixel_box_final_generator.py <desired_width>")
+        sys.exit(1)
+    desired_width = sys.argv[1]
+    main(desired_width)
