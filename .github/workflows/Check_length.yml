@@ -33,4 +33,4 @@ jobs:
       - name: Run Check Width
         run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
         env:
-          GITHUB_STEP_SUMMARY: ${{ steps.summary.outputs.step_summary }}
+          GITHUB_STEP_SUMMARY: ${{ steps.upload_summary.outputs.step_summary }}
