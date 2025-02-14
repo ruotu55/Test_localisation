@@ -2,38 +2,55 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
-    # Use a truetype font
-    font = ImageFont.truetype(font_path, font_size)
-    # Create a dummy image and get the bounding box of the text
+def get_text_pixel_width(text, font_path, font_size=10):
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except IOError:
+        print(f"Font file '{font_path}' not found.  Arial may not be installed or the path is incorrect. Using default DejaVuSans")
+        font_path_default = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+        font = ImageFont.truetype(font_path_default, font_size) # Fallback to DejaVuSans
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
     bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0]  # Calculate width from the bounding box
+    width = bbox[2] - bbox[0]
     return width
 
 def main(event_name):
-    event_name_upper = event_name.upper()  # Convert the event name to upper case
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
-    font_size = 15  # Font size
+    event_name_upper = event_name.upper()
+    font_path = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf" # Likely path for Arial on Ubuntu after installing msttcorefonts
+    font_size = 15
+
     try:
         words = event_name_upper.split()
-        # Calculate width for each word
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
-        # Calculate total width including spaces
         total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path, font_size)
-        # Prepare the summary text
+
         summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
         summary_text += f"\nThe total pixel width of the event name '{event_name_upper}' including spaces is: {total_width_including_spaces}\n"
-        # Write the summary to the file specified by GITHUB_STEP_SUMMARY
+
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
-        # Print summary to console as well (optional)
         print(summary_text)
-    except IOError:
-        print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
+
+    except Exception as e: # Catching a broader exception for any issues
+        print(f"An error occurred: {e}")
+        print("Arial font may not be available. Using DejaVuSans as a fallback.")
+        font_path_default = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+        words = event_name_upper.split()
+        word_widths = {word: get_text_pixel_width(word, font_path_default, font_size) for word in words}
+        total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path_default, font_size)
+
+        summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
+        for word, width in word_widths.items():
+            summary_text += f"The pixel width of the word '{word}' is: {width}\n"
+        summary_text += f"\nThe total pixel width of the event name '{event_name_upper}' including spaces is: {total_width_including_spaces}\n"
+
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+            summary_file.write(summary_text)
+        print(summary_text)
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
