@@ -2,7 +2,7 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path, font_size=10):
+def get_text_pixel_width(text, font_path, font_size=10, first_letter_scale=1.2):
     try:
         font = ImageFont.truetype(font_path, font_size)
     except IOError:
@@ -11,7 +11,7 @@ def get_text_pixel_width(text, font_path, font_size=10):
         font = ImageFont.truetype(font_path_default, font_size)
 
     total_width = 0
-    for char in text:  # Iterate over each character
+    for char in text:
         image = Image.new('RGB', (1, 1))
         draw = ImageDraw.Draw(image)
         bbox = draw.textbbox((0, 0), char, font=font)
@@ -21,37 +21,75 @@ def get_text_pixel_width(text, font_path, font_size=10):
 
 
 def main(event_name):
-    event_name_upper = event_name.upper()
-    font_path = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf" # Likely path for Arial on Ubuntu after installing msttcorefonts
-    font_size = 15
+    font_path = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf"  # Likely path for Arial on Ubuntu
+    font_size = 10
+    first_letter_scale = 1.2  # Scale factor for the first letter
 
     try:
-        words = event_name_upper.split()
-        word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
-        total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path, font_size)
+        words = event_name.split()
+        modified_words = []
+        word_widths = {}
+        total_width_including_spaces = 0
+
+        for word in words:
+            modified_word = ""
+            first_char = word[0].upper()
+            other_chars = word[1:].lower()
+            modified_word = first_char + other_chars
+            modified_words.append(modified_word)
+
+            first_letter_width = get_text_pixel_width(first_char, font_path, int(font_size * first_letter_scale))
+            rest_of_word_width = get_text_pixel_width(other_chars, font_path, font_size)
+
+            word_width = first_letter_width + rest_of_word_width
+            word_widths[modified_word] = word_width
+            total_width_including_spaces += word_width
+
+        total_width_including_spaces += get_text_pixel_width(" " * (len(words) -1 ), font_path, font_size) #add space width to total width
+
+        modified_event_name = " ".join(modified_words)
 
 
-        summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
+        summary_text = f"The pixel width of the words and the total pixel width of the event name '{modified_event_name}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
-        summary_text += f"\nThe total pixel width of the event name '{event_name_upper}' including spaces is: {total_width_including_spaces}\n"
+        summary_text += f"\nThe total pixel width of the event name '{modified_event_name}' including spaces is: {total_width_including_spaces}\n"
 
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
         print(summary_text)
 
-    except Exception as e: # Catching a broader exception for any issues
+    except Exception as e:
         print(f"An error occurred: {e}")
         print("Arial font may not be available. Using DejaVuSans as a fallback.")
         font_path_default = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-        words = event_name_upper.split()
-        word_widths = {word: get_text_pixel_width(word, font_path_default, font_size) for word in words}
-        total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path_default, font_size)
+        words = event_name.split()
+        modified_words = []
+        word_widths = {}
+        total_width_including_spaces = 0
 
-        summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
+        for word in words:
+            modified_word = ""
+            first_char = word[0].upper()
+            other_chars = word[1:].lower()
+            modified_word = first_char + other_chars
+            modified_words.append(modified_word)
+
+            first_letter_width = get_text_pixel_width(first_char, font_path_default, int(font_size * first_letter_scale))
+            rest_of_word_width = get_text_pixel_width(other_chars, font_path_default, font_size)
+
+            word_width = first_letter_width + rest_of_word_width
+            word_widths[modified_word] = word_width
+            total_width_including_spaces += word_width
+        
+        total_width_including_spaces += get_text_pixel_width(" " * (len(words) -1 ), font_path_default, font_size) #add space width to total width
+
+        modified_event_name = " ".join(modified_words)
+
+        summary_text = f"The pixel width of the words and the total pixel width of the event name '{modified_event_name}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
-        summary_text += f"\nThe total pixel width of the event name '{event_name_upper}' including spaces is: {total_width_including_spaces}\n"
+        summary_text += f"\nThe total pixel width of the event name '{modified_event_name}' including spaces is: {total_width_including_spaces}\n"
 
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
