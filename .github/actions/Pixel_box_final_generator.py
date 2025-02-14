@@ -15,12 +15,12 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
 def generate_random_word_with_width(desired_width, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
     letters = string.ascii_lowercase
     while True:
-        word = ''.join(random.choice(letters) for i in range(10))  # Start with a word of length 10
+        word = ''.join(random.choice(letters) for _ in range(10))  # Start with a word of length 10
         word_width = get_text_pixel_width(word, font_path, font_size)
         if word_width == desired_width:
             return word
-        elif word_width > desired_width:
-            word = word[:int(10 * desired_width / word_width)]
+        elif word_width > desired_width and len(word) > 1:
+            word = word[:max(1, int(len(word) * desired_width / word_width))]
             if get_text_pixel_width(word, font_path, font_size) == desired_width:
                 return word
 
@@ -43,7 +43,7 @@ def main(desired_width):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python Pixel_box_final.py <desired_width>")
+        print("Usage: python Pixel_box_final_generator.py <desired_width>")
         sys.exit(1)
     desired_width = sys.argv[1]
     main(desired_width)
