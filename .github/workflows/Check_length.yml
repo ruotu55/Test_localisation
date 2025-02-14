@@ -30,7 +30,7 @@ jobs:
       - name: Download and Install Arial font
         run: |
           mkdir -p ~/.fonts
-          wget -O ~/.fonts/arial.ttf https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf
+          curl -L -o ~/.fonts/arial.ttf https://www.cufonfonts.com/download/font/arial
           fc-cache -fv
 
       - name: Run Check Width
