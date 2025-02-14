@@ -1,8 +1,7 @@
 import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
-
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/msttcorefonts/Arial.ttf', font_size=10):
+def get_text_pixel_width(text, font_path=os.path.expanduser('~/.fonts/Arial.ttf'), font_size=10):
     # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
     # Create a dummy image and get the bounding box of the text
@@ -11,10 +10,9 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/msttcorefont
     bbox = draw.textbbox((0, 0), text, font=font)
     width = bbox[2] - bbox[0]  # Calculate width from the bounding box
     return width
-
 def main(event_name):
     event_name_upper = event_name.upper()  # Convert the event name to upper case
-    font_path = '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf'  # Path to the Arial truetype font file
+    font_path = os.path.expanduser('~/.fonts/Arial.ttf')  # Path to the Arial truetype font file
     font_size = 15  # Font size
     try:
         words = event_name_upper.split()
@@ -41,10 +39,9 @@ def main(event_name):
         print(summary_text)
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
-
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python check_width.py <event_name>")
+print("Usage: python check_width.py <event_name>")
         sys.exit(1)
     event_name = sys.argv[1]
     main(event_name)
