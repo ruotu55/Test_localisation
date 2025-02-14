@@ -24,11 +24,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install langdetect Pillow
+          pip install Pillow
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install Arial font
-        run: sudo apt-get install -y msttcorefonts
+      - name: Download and Install Arial font
+        run: |
+          mkdir -p ~/.fonts
+          wget -O ~/.fonts/Arial.ttf https://github.com/martinring/clj/tree/master/resources/fonts/arial.ttf
+          fc-cache -fv
 
       - name: Run Check Width
         run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
