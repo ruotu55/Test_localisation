@@ -20,15 +20,22 @@ def main(event_name):
         words = event_name_upper.split()
         # Calculate width for each word
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
+        # Individual character widths for debugging
+        char_widths = [
+            (word, {char: get_text_pixel_width(char, font_path, font_size) for char in word})
+            for word in words
+        ]
         # Calculate total width including spaces
         total_width_including_spaces = get_text_pixel_width(event_name_upper, font_path, font_size)
         # Prepare the summary text
         summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name_upper}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
+            for char, c_width in dict(char_widths).get(word).items():
+                summary_text += f"  - {char} width: {c_width}\n"
         summary_text += f"\nThe total pixel width of the event name '{event_name_upper}' including spaces is: {total_width_including_spaces}\n"
         # Write the summary to the file specified by GITHUB_STEP_SUMMARY
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file:
             summary_file.write(summary_text)
         # Print summary to console as well (optional)
         print(summary_text)
