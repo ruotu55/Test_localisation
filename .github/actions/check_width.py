@@ -83,7 +83,6 @@ if __name__ == "__main__":
     # Parse additional arguments if provided
     for arg in sys.argv[2:]:
         if ":" in arg:
-language, font_size = arg.split(":")
+            language, font_size = arg.split(":")
             if language in languages_font_sizes:
                 languages_font_sizes[language] = int(font_size)
-    main(event_name, languages_font_sizes)
