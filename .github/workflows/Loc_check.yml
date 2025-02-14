@@ -32,3 +32,6 @@ jobs:
 
       - name: Run Pixel_box_final
         run: python .github/actions/Pixel_box_final.py "${{ github.event.inputs.event_name }}"
+
+      - name: Run Check Width
+        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
