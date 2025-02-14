@@ -12,25 +12,39 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     width = bbox[2] - bbox[0]
     return width
 
-def generate_random_word_with_width(desired_width, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def generate_random_word_with_width(desired_width, font_path, font_size, max_attempts=1000):
     letters = string.ascii_lowercase
-    while True:
-        word = ''.join(random.choice(letters) for _ in range(10))  # Start with a word of length 10
+    avg_char_width = get_text_pixel_width('a', font_path, font_size)
+    approx_length = desired_width // avg_char_width
+
+    for _ in range(max_attempts):
+        word = ''.join(random.choice(letters) for _ in range(approx_length))
         word_width = get_text_pixel_width(word, font_path, font_size)
         if word_width == desired_width:
             return word
-        elif word_width > desired_width and len(word) > 1:
-            word = word[:max(1, int(len(word) * desired_width / word_width))]
+        elif word_width > desired_width:
+            reduced_length = int(len(word) * desired_width / word_width)
+            word = word[:reduced_length]
             if get_text_pixel_width(word, font_path, font_size) == desired_width:
                 return word
+    
+    return None  # Return None if unable to find word of desired width within max_attempts
 
 def main(desired_width):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     font_size = 10
     try:
         desired_width = int(desired_width)
-        words = [generate_random_word_with_width(desired_width, font_path, font_size) for _ in range(50)]
-        summary_text = f"Generated 50 words with the width of {desired_width} pixels:\n\n"
+        words = []
+        for _ in range(50):
+            word = generate_random_word_with_width(desired_width, font_path, font_size)
+            if word:
+                words.append(word)
+            else:
+                print(f"Unable to generate a word with width {desired_width} pixels.")
+                break
+        
+        summary_text = f"Generated {len(words)} words with the width of {desired_width} pixels:\n\n"
         for word in words:
             summary_text += f"{word}\n"
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
