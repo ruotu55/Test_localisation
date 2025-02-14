@@ -12,41 +12,43 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     width = bbox[2] - bbox[0]
     return width
 
-def generate_random_word_with_width(desired_width, font_path, font_size, max_attempts=1000):
+def generate_word(font_path, font_size):
     letters = string.ascii_lowercase
-    avg_char_width = get_text_pixel_width('a', font_path, font_size)
-    approx_length = desired_width // avg_char_width
+    length = random.randint(1, 10)  # Vary the length of words
+    word = ''.join(random.choice(letters) for _ in range(length))
+    return word
 
+def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=1000):
+    space_width = get_text_pixel_width(' ', font_path, font_size)
     for _ in range(max_attempts):
-        word = ''.join(random.choice(letters) for _ in range(approx_length))
-        word_width = get_text_pixel_width(word, font_path, font_size)
-        if word_width == desired_width:
-            return word
-        elif word_width > desired_width:
-            reduced_length = int(len(word) * desired_width / word_width)
-            word = word[:reduced_length]
-            if get_text_pixel_width(word, font_path, font_size) == desired_width:
-                return word
+        num_words = random.randint(1, 3)
+        words = [generate_word(font_path, font_size) for _ in range(num_words)]
+        sentence = ' '.join(words)
+        sentence_width = get_text_pixel_width(sentence, font_path, font_size)
+        if sentence_width == desired_width:
+            return sentence
+        elif sentence_width > desired_width:
+            continue  # Skip sentences that are too long
     
-    return None  # Return None if unable to find word of desired width within max_attempts
+    return None  # Return None if unable to find sentence of desired width within max_attempts
 
 def main(desired_width):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     font_size = 10
     try:
         desired_width = int(desired_width)
-        words = []
+        sentences = []
         for _ in range(50):
-            word = generate_random_word_with_width(desired_width, font_path, font_size)
-            if word:
-                words.append(word)
+            sentence = generate_sentence_with_width(desired_width, font_path, font_size)
+            if sentence:
+                sentences.append(sentence)
             else:
-                print(f"Unable to generate a word with width {desired_width} pixels.")
+                print(f"Unable to generate a sentence with width {desired_width} pixels.")
                 break
         
-        summary_text = f"Generated {len(words)} words with the width of {desired_width} pixels:\n\n"
-        for word in words:
-            summary_text += f"{word}\n"
+        summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
+        for sentence in sentences:
+            summary_text += f"{sentence}\n"
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
         print(summary_text)
