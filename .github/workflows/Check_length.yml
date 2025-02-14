@@ -27,10 +27,10 @@ jobs:
           pip install Pillow
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Download and Install Arial font
+      - name: Download and Install Roboto font
         run: |
           mkdir -p ~/.fonts
-          curl -L -o ~/.fonts/arial.ttf https://www.cufonfonts.com/download/font/arial
+          wget -O ~/.fonts/roboto.ttf https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf
           fc-cache -fv
 
       - name: Run Check Width
