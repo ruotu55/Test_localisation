@@ -1,6 +1,6 @@
 import sys
 import os
-from PIL import ImageFont, ImageDraw, Image  # Import Image
+from PIL import ImageFont, ImageDraw, Image
 
 def get_text_pixel_width(text, font_path, font_size):
     font = ImageFont.truetype(font_path, font_size)
@@ -10,34 +10,21 @@ def get_text_pixel_width(text, font_path, font_size):
     width = bbox[2] - bbox[0]
     return width
 
-def get_word_width_with_space(word, font_path, font_size):
-    return get_text_pixel_width(word + " ", font_path, font_size)
-
-def get_space_width(font_path, font_size):
-    return get_word_width_with_space("a", font_path, font_size) - get_text_pixel_width("a", font_path, font_size)
-
 def main(event_name):
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     font_size = 10
     try:
         words = event_name.split()
         word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
-        space_width = get_space_width(font_path, font_size)  # Calculate space width ONCE
 
-        # Correctly calculate total width including spaces:
-        total_width_including_spaces = 0
-        for i, word in enumerate(words):
-            total_width_including_spaces += word_widths[word]
-            if i < len(words) - 1:
-                total_width_including_spaces += space_width  # Use the calculated space width
-
+        total_width_including_spaces = get_text_pixel_width(event_name, font_path, font_size)
 
         summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
         summary_text += f"\nThe total pixel width of the event name '{event_name}' including spaces is: {total_width_including_spaces}\n"
 
-        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file: # Provide a default file name
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file:
             summary_file.write(summary_text)
         print(summary_text)
 
