@@ -29,15 +29,15 @@ jobs:
           sudo apt-get install -y fonts-dejavu
           fc-cache -fv  # Update font cache
       - name: Run Check Width
-        id: check_width  # Add an ID to the step
+        id: check_width
         run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
       - name: Upload summary
-        uses: actions/upload-artifact@v4  # Use v4
+        uses: actions/upload-artifact@v4
         with:
           name: check_width_summary
-          path: summary.txt # Path to the summary file (adjust if needed)
+          path: summary.txt
       - name: Download summary
-        uses: actions/download-artifact@v4 # Use v4 - THIS IS THE FIX
+        uses: actions/download-artifact@v4
         with:
           name: check_width_summary
       - name: Display summary
