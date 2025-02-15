@@ -29,24 +29,26 @@ jobs:
         shell: bash
         run: |
           sentence="${{ github.event.inputs.sentence }}"
-          words=($sentence)
-          widths=""
+          python << EOF > word_widths.txt
+from PIL import Image, ImageFont, ImageDraw
 
-          python -c "from PIL import Image, ImageFont, ImageDraw; \
-                     font = ImageFont.load_default(); \
-                     img = Image.new('RGB', (100, 100), color = 'white'); \
-                     draw = ImageDraw.Draw(img); \
-                     sentence = '${{ github.event.inputs.sentence }}'; \
-                     words = sentence.split(); \
-                     widths = ''; \
-                     for word in words: \
-                         size = draw.textsize(word, font=font); \
-                         widths += f'{word}: {size[0]} pixels\\n'; \
-                     print(widths)" > word_widths.txt
+font = ImageFont.load_default()
+img = Image.new('RGB', (100, 100), color='white')  # Create a dummy image
+draw = ImageDraw.Draw(img)
+
+sentence = "$sentence" # Use the shell variable
+words = sentence.split()
+widths = ""
+
+for word in words:
+    size = draw.textsize(word, font=font)
+    widths += f"{word}: {size[0]} pixels\\n"
+
+print(widths)
+EOF
 
           cat word_widths.txt
           echo "::set-output name=results::$(cat word_widths.txt)"
-
 
       - name: Display results
         run: |
