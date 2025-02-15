@@ -36,38 +36,29 @@ def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu
     lines = []
     current_line = []
     current_line_width = 0
+
     for word in text.split():
         word_width = get_text_pixel_width(word, font_path=font_path, font_size=font_size)
-        if current_line_width + word_width + (space_width if current_line else 0) <= max_line_pixel_width:
+        new_width = current_line_width + word_width + (space_width if current_line else 0)
+
+        if new_width <= max_line_pixel_width:
             current_line.append(word)
-            current_line_width += word_width + (space_width if current_line else 0)
+            current_line_width = new_width
         else:
             lines.append(current_line)
             current_line = [word]
             current_line_width = word_width
-        if len(lines) + 1 > 2:  # As we only allow 2 lines
-            return False
+
+        if len(lines) >= 2:
+            if len(lines) == 2 and new_width > max_line_pixel_width:
+                return False
 
     lines.append(current_line)
 
-    # Check for perfect fit on the second line and adjust space handling
-    if len(lines) == 2:
-        last_line_width = 0
-        for w in lines[1]:
-            last_line_width += get_text_pixel_width(w, font_path, font_size)
-            if lines[1].index(w) < len(lines[1])-1:
-                last_line_width += space_width
+    if len(lines) > 2:
+        return False
 
-        first_line_width = 0
-        for w in lines[0]:
-            first_line_width += get_text_pixel_width(w, font_path, font_size)
-            if lines[0].index(w) < len(lines[0])-1:
-                first_line_width += space_width
-
-        if first_line_width + last_line_width <= max_line_pixel_width*2:
-            return True
-
-    return len(lines) <= 2
+    return True
 
 rows_checked = 0
 rows_passed = 0
