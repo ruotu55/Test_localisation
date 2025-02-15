@@ -5,6 +5,7 @@ on:
       event_name:
         description: 'Event name prefix to check'
         required: true
+
 jobs:
   localization_check:
     runs-on: ubuntu-22.04
@@ -28,6 +29,17 @@ jobs:
           sudo apt-get install -y fonts-dejavu
           fc-cache -fv  # Update font cache
       - name: Run Check Width
-        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
-        env:
-          GITHUB_STEP_SUMMARY: ${{ steps.upload_summary.outputs.step_summary }}
+        id: check_width  # Add an ID to the step
+        run: python.github/actions/check_width.py "${{ github.event.inputs.event_name }}"
+      - name: Upload summary
+        uses: actions/upload-artifact@v3 # Use upload-artifact to persist the summary
+        with:
+          name: check_width_summary
+          path: summary.txt # Path to the summary file (adjust if needed)
+      - name: Display summary
+        run: |
+          if [[ -f summary.txt ]]; then
+            cat summary.txt
+          else
+            echo "Summary file not found."
+          fi
