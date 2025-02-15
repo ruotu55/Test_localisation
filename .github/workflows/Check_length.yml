@@ -30,12 +30,16 @@ jobs:
           fc-cache -fv  # Update font cache
       - name: Run Check Width
         id: check_width  # Add an ID to the step
-        run: python.github/actions/check_width.py "${{ github.event.inputs.event_name }}"
+        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
       - name: Upload summary
-        uses: actions/upload-artifact@v3 # Use upload-artifact to persist the summary
+        uses: actions/upload-artifact@v4  # Use v4 of upload-artifact
         with:
           name: check_width_summary
           path: summary.txt # Path to the summary file (adjust if needed)
+      - name: Download summary
+        uses: actions/download-artifact@v3 # Use v3 of download-artifact
+        with:
+          name: check_width_summary
       - name: Display summary
         run: |
           if [[ -f summary.txt ]]; then
