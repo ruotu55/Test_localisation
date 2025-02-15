@@ -2,6 +2,7 @@ import csv
 import os
 import sys
 from PIL import ImageFont, ImageDraw, Image
+
 csv_file = '.map-editor/locale/items.csv'
 language_columns = {
     'Russian': 1,
@@ -20,6 +21,7 @@ language_columns = {
     'Polish': 14,
     'Chinese (Traditional)': 15
 }
+
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
     font = ImageFont.truetype(font_path, font_size)
     image = Image.new('RGB', (1, 1))
@@ -27,6 +29,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     bbox = draw.textbbox((0, 0), text, font=font)
     width = bbox[2] - bbox[0]
     return width
+
 def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, max_line_pixel_width=93):
     font = ImageFont.truetype(font_path, font_size)
     space_width = get_text_pixel_width(' ', font_path=font_path, font_size=font_size)
@@ -44,12 +47,33 @@ def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu
             current_line_width = word_width
         if len(lines) + 1 > 2:  # As we only allow 2 lines
             return False
+
     lines.append(current_line)
+
+    # Check for perfect fit on the second line and adjust space handling
+    if len(lines) == 2:
+        last_line_width = 0
+        for w in lines[1]:
+            last_line_width += get_text_pixel_width(w, font_path, font_size)
+            if lines[1].index(w) < len(lines[1])-1:
+                last_line_width += space_width
+
+        first_line_width = 0
+        for w in lines[0]:
+            first_line_width += get_text_pixel_width(w, font_path, font_size)
+            if lines[0].index(w) < len(lines[0])-1:
+                first_line_width += space_width
+
+        if first_line_width + last_line_width <= max_line_pixel_width*2:
+            return True
+
     return len(lines) <= 2
+
 rows_checked = 0
 rows_passed = 0
 rows_failed = 0
 error_messages = []
+
 def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
     global rows_checked, rows_passed, rows_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
@@ -94,6 +118,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
         summary_file.write("\n### Errors:\n")
         for error_message in error_messages:
             summary_file.write(f"- {error_message}\n")
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python check_pixel_length.py <event_prefix>")
