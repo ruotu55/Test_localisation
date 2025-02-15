@@ -2,37 +2,45 @@ import sys
 import os
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def get_text_pixel_width(text, font_path, font_size):
     font = ImageFont.truetype(font_path, font_size)
-    # Create a dummy image *large enough* to hold the text.  Important!
-    image = Image.new('RGB', (500, 50))  # Adjust size as needed
+    image = Image.new('RGB', (2000, 50))  # Increased size! Important
     draw = ImageDraw.Draw(image)
     bbox = draw.textbbox((0, 0), text, font=font)
-
-    # Now, crop the image to the actual text bounding box. This is the key!
     cropped_image = image.crop(bbox)
-    width = cropped_image.size[0]
-    return width
+    return cropped_image.size[0]
 
 def main(event_name):
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'  # Path to the DejaVuSans truetype font file
-    font_size = 10  # Font size
+    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    font_size = 10
+
     try:
         words = event_name.split()
-        # Calculate width for each word
-        word_widths = {word: get_text_pixel_width(word, font_path, font_size) for word in words}
-        # Calculate total width including spaces
+        word_widths = {}
+
+        # Iterate through words and calculate width *including* trailing space
+        current_position = 0
+        for i, word in enumerate(words):
+            text_to_measure = word
+            if i < len(words) - 1: # Add space if not the last word
+                text_to_measure += " " # Add space after the word
+            width = get_text_pixel_width(text_to_measure, font_path, font_size)
+            word_widths[word] = width
+            current_position += width
+
         total_width_including_spaces = get_text_pixel_width(event_name, font_path, font_size)
-        # Prepare the summary text
+
+
         summary_text = f"The pixel width of the words and the total pixel width of the event name '{event_name}' including spaces is as follows:\n\n"
         for word, width in word_widths.items():
             summary_text += f"The pixel width of the word '{word}' is: {width}\n"
         summary_text += f"\nThe total pixel width of the event name '{event_name}' including spaces is: {total_width_including_spaces}\n"
-        # Write the summary to the file specified by GITHUB_STEP_SUMMARY
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file: # Default filename if env variable is not set
             summary_file.write(summary_text)
-        # Print summary to console as well (optional)
+
         print(summary_text)
+
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
 
