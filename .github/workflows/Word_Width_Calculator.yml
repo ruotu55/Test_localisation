@@ -28,15 +28,16 @@ jobs:
         id: calculate
         shell: bash
         run: |
-          sentence="${{ github.event.inputs.sentence }}"
+          sentence="${{ github.event.inputs.sentence }}"  # Get the input sentence
+
           python << EOF > word_widths.txt
 from PIL import Image, ImageFont, ImageDraw
 
-font = ImageFont.load_default()
-img = Image.new('RGB', (100, 100), color='white')  # Create a dummy image
+font = ImageFont.load_default() # Or your font file: ImageFont.truetype("path/to/your/font.ttf", size=12)
+img = Image.new('RGB', (100, 100), color='white')
 draw = ImageDraw.Draw(img)
 
-sentence = "$sentence" # Use the shell variable
+sentence = "$sentence" # This is the crucial change!
 words = sentence.split()
 widths = ""
 
