@@ -3,13 +3,15 @@ import os
 from PIL import ImageFont, ImageDraw, Image
 
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
-    # Use a truetype font
     font = ImageFont.truetype(font_path, font_size)
-    # Create a dummy image and get the bounding box of the text
-    image = Image.new('RGB', (1, 1))
+    # Create a dummy image *large enough* to hold the text.  Important!
+    image = Image.new('RGB', (500, 50))  # Adjust size as needed
     draw = ImageDraw.Draw(image)
     bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0]  # Calculate width from the bounding box
+
+    # Now, crop the image to the actual text bounding box. This is the key!
+    cropped_image = image.crop(bbox)
+    width = cropped_image.size[0]
     return width
 
 def main(event_name):
