@@ -1,6 +1,6 @@
 import sys
 import os
-from PIL import ImageFont, ImageDraw
+from PIL import ImageFont, ImageDraw, Image  # Import Image
 
 def get_text_pixel_width(text, font_path, font_size):
     font = ImageFont.truetype(font_path, font_size)
