@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'  # Or any suitable version
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
@@ -29,15 +29,24 @@ jobs:
         shell: bash
         run: |
           sentence="${{ github.event.inputs.sentence }}"
-          words=($sentence)  # Split the sentence into words
+          words=($sentence)
           widths=""
-          for word in "${words[@]}"; do
-            # Use a dummy image to get font metrics.  A real font file is better.
-            python -c "from PIL import Image, ImageFont, ImageDraw; font = ImageFont.load_default(); size = font.getsize('$word'); print(size[0])" > word_width.txt
-            width=$(cat word_width.txt)
-            widths+="$word: $width pixels\n"
-          done
-          echo "::set-output name=results::$widths"
+
+          python -c "from PIL import Image, ImageFont, ImageDraw; \
+                     font = ImageFont.load_default(); \
+                     img = Image.new('RGB', (100, 100), color = 'white'); \
+                     draw = ImageDraw.Draw(img); \
+                     sentence = '${{ github.event.inputs.sentence }}'; \
+                     words = sentence.split(); \
+                     widths = ''; \
+                     for word in words: \
+                         size = draw.textsize(word, font=font); \
+                         widths += f'{word}: {size[0]} pixels\\n'; \
+                     print(widths)" > word_widths.txt
+
+          cat word_widths.txt
+          echo "::set-output name=results::$(cat word_widths.txt)"
+
 
       - name: Display results
         run: |
@@ -46,7 +55,7 @@ jobs:
 
       - name: Create a comment with the results (Optional)
         uses: actions/github-script@v6
-        if: github.event_name == 'workflow_dispatch' # Only on manual runs
+        if: github.event_name == 'workflow_dispatch'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
