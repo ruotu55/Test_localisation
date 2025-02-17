@@ -4,7 +4,7 @@ import random
 import string
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sans-sc/AlegreyaSansSC-Regular.ttf', font_size=10):
     font = ImageFont.truetype(font_path, font_size)
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
@@ -29,11 +29,11 @@ def generate_sentence_with_width(desired_width, font_path, font_size, max_attemp
             return sentence
         elif sentence_width > desired_width:
             continue  # Skip sentences that are too long
-    
+
     return None  # Return None if unable to find sentence of desired width within max_attempts
 
 def main(desired_width):
-    font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    font_path = '/usr/share/fonts/truetype/alegreya-sans-sc/AlegreyaSansSC-Regular.ttf'
     font_size = 10
     try:
         desired_width = int(desired_width)
@@ -45,7 +45,7 @@ def main(desired_width):
             else:
                 print(f"Unable to generate a sentence with width {desired_width} pixels.")
                 break
-        
+
         summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
         for sentence in sentences:
             summary_text += f"{sentence}\n"
