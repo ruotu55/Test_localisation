@@ -26,6 +26,8 @@ def generate_sentence_with_width(desired_width, font_path, font_size, max_attemp
     space_width = get_text_pixel_width(' ', font_path, font_size)
     if space_width is None:
         return None
+    best_sentence = None
+    best_diff = float('inf')
     for _ in range(max_attempts):
         num_words = random.randint(1, 3)
         words = [generate_word(font_path, font_size) for _ in range(num_words)]
@@ -33,12 +35,13 @@ def generate_sentence_with_width(desired_width, font_path, font_size, max_attemp
         sentence_width = get_text_pixel_width(sentence, font_path, font_size)
         if sentence_width is None:
             return None
-        if sentence_width == desired_width:
-            return sentence
-        elif sentence_width > desired_width:
-            continue  # Skip sentences that are too long
-
-    return None  # Return None if unable to find sentence of desired width within max_attempts
+        diff = abs(sentence_width - desired_width)
+        if diff < best_diff:
+            best_diff = diff
+            best_sentence = sentence
+            if diff == 0:
+                return best_sentence
+    return best_sentence
 
 def main(desired_width, font_path):
     font_size = 10
@@ -53,9 +56,10 @@ def main(desired_width, font_path):
                 print(f"Unable to generate a sentence with width {desired_width} pixels.")
                 break
 
-        summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
+        summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels (or closest possible):\n\n"
         for sentence in sentences:
-            summary_text += f"{sentence}\n"
+            sentence_width = get_text_pixel_width(sentence, font_path, font_size)
+            summary_text += f"{sentence} (Width: {sentence_width} pixels)\n"
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
             summary_file.write(summary_text)
         print(summary_text)
