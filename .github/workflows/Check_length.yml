@@ -22,10 +22,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install langdetect Pillow
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Download Alegreya Sans SC font
+      - name: Install DejaVuSans font
         run: |
-          wget https://github.com/google/fonts/raw/main/ofl/alegreyasanssc/AlegreyaSansSC-Black.ttf -O AlegreyaSansSC-Black.ttf
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu
+          fc-cache -fv  # Update font cache
       - name: Run Check Width
-        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}" AlegreyaSansSC-Black.ttf
+        run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
         env:
           GITHUB_STEP_SUMMARY: ${{ steps.upload_summary.outputs.step_summary }}
