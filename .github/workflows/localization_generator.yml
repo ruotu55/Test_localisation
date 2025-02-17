@@ -1,3 +1,4 @@
+# .github/workflows/localization_generator.yml
 name: String Generator
 
 on:
@@ -31,9 +32,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget fontconfig
-          wget https://github.com/impallari/Alegreya-SC/raw/master/fonts/ttf/AlegreyaSC-Black.ttf
+          wget https://github.com/google/fonts/raw/main/ofl/alegreyasanssc/AlegreyaSansSC-Black.ttf -O AlegreyaSansSC-Black.ttf
           sudo mkdir -p /usr/share/fonts/truetype/alegreya-sc
-          sudo mv AlegreyaSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
+          sudo mv AlegreyaSansSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
           sudo fc-cache -fv
 
       - name: Run Pixel_box_final_generator
