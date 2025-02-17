@@ -5,7 +5,7 @@ import random
 import string
 from PIL import ImageFont, ImageDraw, Image
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSC-Black.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10):
     font = ImageFont.truetype(font_path, font_size)
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
@@ -34,7 +34,7 @@ def generate_sentence_with_width(desired_width, font_path, font_size, max_attemp
     return None  # Return None if unable to find sentence of desired width within max_attempts
 
 def main(desired_width):
-    font_path = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSC-Black.ttf'
+    font_path = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf'
     font_size = 10
     try:
         desired_width = int(desired_width)
