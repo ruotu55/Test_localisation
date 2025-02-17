@@ -1,3 +1,4 @@
+# .github/actions/Pixel_box_final.py
 import csv
 import os
 import sys
@@ -22,7 +23,7 @@ language_columns = {
     'Chinese (Traditional)': 15
 }
 
-def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10):
     font = ImageFont.truetype(font_path, font_size)
     image = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(image)
@@ -30,7 +31,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/dejavu/DejaV
     width = bbox[2] - bbox[0]
     return width
 
-def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10, max_line_pixel_width=114):
+def does_text_fit_in_two_lines(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10, max_line_pixel_width=114):
     font = ImageFont.truetype(font_path, font_size)
     space_width = get_text_pixel_width(' ', font_path=font_path, font_size=font_size)
     lines = []
@@ -65,7 +66,7 @@ rows_passed = 0
 rows_failed = 0
 error_messages = []
 
-def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size=10):
+def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10):
     global rows_checked, rows_passed, rows_failed
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
@@ -112,7 +113,7 @@ def check_strings_and_pixel_length(event_prefix, font_path='/usr/share/fonts/tru
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python check_pixel_length.py <event_prefix>")
+        print("Usage: python Pixel_box_final.py <event_prefix>")
         sys.exit(1)
     event_prefix = sys.argv[1]
     check_strings_and_pixel_length(event_prefix)
