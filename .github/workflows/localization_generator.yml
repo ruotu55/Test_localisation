@@ -1,3 +1,4 @@
+# .github/workflows/localization_generator.yml
 name: String Generator
 
 on:
@@ -27,8 +28,16 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install DejaVu font
-        run: sudo apt-get install -y fonts-dejavu-core
+      - name: Install Alegreya Sans SC font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-google-crosextra-caladea
+          sudo apt-get install -y fonts-google-crosextra-carlito
+          sudo apt-get install -y fonts-freefont-ttf
+          wget https://github.com/impallari/Alegreya-SC/raw/master/fonts/ttf/AlegreyaSC-Black.ttf
+          sudo mkdir -p /usr/share/fonts/truetype/alegreya-sc
+          sudo mv AlegreyaSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
+          sudo fc-cache -fv
 
       - name: Run Pixel_box_final_generator
         run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.desired_width }}"
