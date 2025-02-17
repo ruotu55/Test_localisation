@@ -1,3 +1,4 @@
+# .github/workflows/Check_length.yml
 name: Check_length
 on:
   workflow_dispatch:
@@ -26,9 +27,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget fontconfig
-          wget https://github.com/impallari/Alegreya-SC/raw/master/fonts/ttf/AlegreyaSC-Black.ttf
+          wget https://github.com/google/fonts/raw/main/ofl/alegreyasanssc/AlegreyaSansSC-Black.ttf -O AlegreyaSansSC-Black.ttf
           sudo mkdir -p /usr/share/fonts/truetype/alegreya-sc
-          sudo mv AlegreyaSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
+          sudo mv AlegreyaSansSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
           sudo fc-cache -fv
       - name: Run Check Width
         run: python .github/actions/check_width.py "${{ github.event.inputs.event_name }}"
