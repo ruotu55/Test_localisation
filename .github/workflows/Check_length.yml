@@ -1,4 +1,3 @@
-# .github/workflows/Check_length.yml
 name: Check_length
 on:
   workflow_dispatch:
@@ -26,9 +25,7 @@ jobs:
       - name: Install Alegreya Sans SC font
         run: |
           sudo apt-get update
-          sudo apt-get install -y fonts-google-crosextra-caladea
-          sudo apt-get install -y fonts-google-crosextra-carlito
-          sudo apt-get install -y fonts-freefont-ttf
+          sudo apt-get install -y wget fontconfig
           wget https://github.com/impallari/Alegreya-SC/raw/master/fonts/ttf/AlegreyaSC-Black.ttf
           sudo mkdir -p /usr/share/fonts/truetype/alegreya-sc
           sudo mv AlegreyaSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
