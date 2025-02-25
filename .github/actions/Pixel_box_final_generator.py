@@ -18,48 +18,51 @@ def generate_word(font_path, font_size):
     word = ''.join(random.choice(letters) for _ in range(length))
     return word  # Hiragana characters do not have capitalization
 
-def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=10000):
-    space_width = get_text_pixel_width(' ', font_path, font_size)
+def generate_sentence_within_width_range(min_width, max_width, font_path, font_size, max_attempts=1000):
     for _ in range(max_attempts):
         num_words = random.randint(1, 3)
         words = [generate_word(font_path, font_size) for _ in range(num_words)]
         sentence = ' '.join(words)
         sentence_width = get_text_pixel_width(sentence, font_path, font_size)
-        if sentence_width == desired_width:
+        if min_width <= sentence_width <= max_width:
             return sentence
-        elif sentence_width > desired_width:
-            continue  # Skip sentences that are too long
 
-    return None  # Return None if unable to find a sentence of desired width within max_attempts
+    return None  # Return None if unable to find a sentence within width range within max_attempts
 
-def main(desired_width):
+def main(min_width, max_width):
     font_path = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf'
     font_size = 10
     try:
-        desired_width = int(desired_width)
+        min_width = int(min_width)
+        max_width = int(max_width)
+        if min_width >= max_width:
+            print("Minimum width should be less than maximum width.")
+            return
+
         sentences = []
         for _ in range(50):
-            sentence = generate_sentence_with_width(desired_width, font_path, font_size)
+            sentence = generate_sentence_within_width_range(min_width, max_width, font_path, font_size)
             if sentence:
                 sentences.append(sentence)
             else:
-                print(f"Unable to generate a sentence with width {desired_width} pixels.")
+                print(f"Unable to generate a sentence within width range {min_width}-{max_width} pixels.")
                 break
 
-        summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
+        summary_text = f"Generated {len(sentences)} sentences within the width range of {min_width}-{max_width} pixels:\n\n"
         for sentence in sentences:
             summary_text += f"{sentence}\n"
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+        with open(os.environ.get('GITHUB_STEP_SUMMARY', 'summary.txt'), 'w') as summary_file:
             summary_file.write(summary_text)
         print(summary_text)
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
     except ValueError:
-        print("Please provide a valid integer for the desired width.")
+        print("Please provide valid integers for the width range.")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python Pixel_box_final_generator.py <desired_width>")
+    if len(sys.argv) != 3:
+        print("Usage: python Pixel_box_final_generator.py <min_width> <max_width>")
         sys.exit(1)
-    desired_width = sys.argv[1]
-    main(desired_width)
+    min_width = sys.argv[1]
+    max_width = sys.argv[2]
+    main(min_width, max_width)
