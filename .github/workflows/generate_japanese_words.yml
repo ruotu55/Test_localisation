@@ -4,13 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       length:
-        description: 'Length of the Japanese word to generate'
+        description: 'Length of the Japanese words to generate'
         required: true
         default: 10
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
