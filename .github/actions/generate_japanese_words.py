@@ -15,7 +15,10 @@ if __name__ == "__main__":
         if len(sys.argv) > 1:
             length = int(sys.argv[1])
         else:
-            length = int(input("Enter the desired length of the Japanese word: "))
-        print(f"Generated Japanese word: {generate_random_japanese_word(length)}")
+            raise ValueError("No length provided")
+        words = [generate_random_japanese_word(length) for _ in range(11)]
+        print("Generated Japanese words:")
+        for word in words:
+            print(word)
     except ValueError:
-        print("Invalid input. Please enter an integer.")
+        print("Invalid input. Please provide an integer.")
