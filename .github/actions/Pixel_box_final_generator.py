@@ -12,10 +12,11 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/
     return width
 
 def generate_word(font_path, font_size):
-    letters = 'abcdefghijklmnopqrstuvwxyzàèéìòù'
+    # Set of Hiragana characters
+    letters = 'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん'
     length = random.randint(1, 10)  # Vary the length of words
     word = ''.join(random.choice(letters) for _ in range(length))
-    return word.capitalize()  # Capitalize the first letter of each word
+    return word  # Hiragana characters do not have capitalization
 
 def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=1000):
     space_width = get_text_pixel_width(' ', font_path, font_size)
