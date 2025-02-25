@@ -27,4 +27,4 @@ jobs:
 
     - name: Run generate_japanese_words script
       run: |
-        python ./.github/actions/generate_japanese_words.py ${GITHUB_INPUT_LENGTH}
+        python ./.github/actions/generate_japanese_words.py ${{ github.event.inputs.length }}
