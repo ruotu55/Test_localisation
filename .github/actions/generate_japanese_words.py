@@ -1,4 +1,5 @@
 import random
+import sys
 
 hiragana = list("あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん")
 katakana = list("アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン")
@@ -11,7 +12,10 @@ def generate_random_japanese_word(length):
 
 if __name__ == "__main__":
     try:
-        length = int(input("Enter the desired length of the Japanese word: "))
+        if len(sys.argv) > 1:
+            length = int(sys.argv[1])
+        else:
+            length = int(input("Enter the desired length of the Japanese word: "))
         print(f"Generated Japanese word: {generate_random_japanese_word(length)}")
     except ValueError:
         print("Invalid input. Please enter an integer.")
