@@ -1,7 +1,6 @@
 import os
 import sys
 import random
-import string
 from PIL import ImageFont, ImageDraw, Image
 
 def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10):
@@ -13,7 +12,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/
     return width
 
 def generate_word(font_path, font_size):
-    letters = 'abcdefghijklmnopqrstuvwxyzéàèùâêîôûëïüç'
+    letters = 'abcdefghijklmnopqrstuvwxyzäöüß'
     length = random.randint(1, 10)  # Vary the length of words
     word = ''.join(random.choice(letters) for _ in range(length))
     return word.capitalize()  # Capitalize the first letter of each word
@@ -30,7 +29,7 @@ def generate_sentence_with_width(desired_width, font_path, font_size, max_attemp
         elif sentence_width > desired_width:
             continue  # Skip sentences that are too long
 
-    return None  # Return None if unable to find sentence of desired width within max_attempts
+    return None  # Return None if unable to find a sentence of desired width within max_attempts
 
 def main(desired_width):
     font_path = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf'
