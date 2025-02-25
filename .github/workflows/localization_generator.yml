@@ -41,4 +41,4 @@ jobs:
           sudo fc-cache -fv
 
       - name: Run Pixel_box_final_generator
-        run: python .github/actions/Pixel_box_final_generator.py ${{ github.event.inputs.min_width }} ${{ github.event.inputs.max_width }}
+  run: python .github/actions/Pixel_box_final_generator.py ${{ github.event.inputs.min_width }} ${{ github.event.inputs.max_width }}
