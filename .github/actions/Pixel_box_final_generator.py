@@ -1,4 +1,3 @@
-.github/actions/Pixel_box_final_generator.py
 import os
 import sys
 import random
