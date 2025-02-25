@@ -12,7 +12,7 @@ def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/
     return width
 
 def generate_word(font_path, font_size):
-    letters = 'abcdefghijklmnopqrstuvwxyzáéíóúüñ'
+    letters = 'abcdefghijklmnopqrstuvwxyzàèéìòù'
     length = random.randint(1, 10)  # Vary the length of words
     word = ''.join(random.choice(letters) for _ in range(length))
     return word.capitalize()  # Capitalize the first letter of each word
