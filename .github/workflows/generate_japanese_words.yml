@@ -1,10 +1,12 @@
 name: Generate Japanese Words
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      length:
+        description: 'Length of the Japanese word to generate'
+        required: true
+        default: 10
 
 jobs:
   build:
@@ -26,4 +28,4 @@ jobs:
 
     - name: Run generate_japanese_words script
       run: |
-        python ./.github/actions/generate_japanese_words.py 10  # Replace 10 with the desired length
+        python ./.github/actions/generate_japanese_words.py ${GITHUB_INPUT_LENGTH}
