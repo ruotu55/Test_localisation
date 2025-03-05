@@ -1,14 +1,11 @@
+# .github/actions/Pixel_box_final_generator.py
 import random
 import sys
 
-hiragana = list("あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん")
-katakana = list("アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン")
-kanji = list("一二三四五上下左右中大小月火水木金土")
+chinese_characters = list("的一是不了人我在有他这来上大为和国地到以说时事要就出而可里后自都于之也家用能好下那年学起都就你我他她是谁很小么什么多少先生今天星期几号再见喜欢高兴漂亮") # A more extensive Chinese character list could be used
 
-japanese_sets = hiragana + katakana + kanji
-
-def generate_random_japanese_word(length):
-    return ''.join(random.choice(japanese_sets) for _ in range(length))
+def generate_random_chinese_word(length):
+    return ''.join(random.choice(chinese_characters) for _ in range(length))
 
 if __name__ == "__main__":
     try:
@@ -16,8 +13,8 @@ if __name__ == "__main__":
             length = int(sys.argv[1])
         else:
             raise ValueError("No length provided")
-        words = [generate_random_japanese_word(length) for _ in range(11)]
-        print("Generated Japanese words:")
+        words = [generate_random_chinese_word(length) for _ in range(11)]
+        print("Generated Chinese words:")
         for word in words:
             print(word)
     except ValueError:
