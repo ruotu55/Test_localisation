@@ -4,62 +4,62 @@ import random
 import string
 from PIL import ImageFont, ImageDraw, Image
 
-def obter_largura_pixel_texto(texto, caminho_fonte='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', tamanho_fonte=10):
-    fonte = ImageFont.truetype(caminho_fonte, tamanho_fonte)
-    imagem = Image.new('RGB', (1, 1))
-    desenho = ImageDraw.Draw(imagem)
-    caixa_limites = desenho.textbbox((0, 0), texto, fonte=fonte)
-    largura = caixa_limites[2] - caixa_limites[0]
-    return largura
+def get_text_pixel_width(text, font_path='/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf', font_size=10):
+    font = ImageFont.truetype(font_path, font_size)
+    image = Image.new('RGB', (1, 1))
+    draw = ImageDraw.Draw(image)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0]
+    return width
 
-def gerar_palavra(caminho_fonte, tamanho_fonte):
-    letras = 'abcdefghijklmnopqrstuvwxyzáéíóúàèìòùâêîôûãõç'
-    comprimento = random.randint(1, 10)  # Varia o comprimento das palavras
-    palavra = ''.join(random.choice(letras) for _ in range(comprimento))
-    return palavra.capitalize()  # Capitaliza a primeira letra de cada palavra
+def generate_word(font_path, font_size):
+    letters = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+    length = random.randint(1, 10)  # Vary the length of words
+    word = ''.join(random.choice(letters) for _ in range(length))
+    return word.capitalize()  # Capitalize the first letter of each word
 
-def gerar_frase_com_largura(largura_desejada, caminho_fonte, tamanho_fonte, max_tentativas=1000):
-    largura_espaco = obter_largura_pixel_texto(' ', caminho_fonte, tamanho_fonte)
-    for _ in range(max_tentativas):
-        num_palavras = random.randint(1, 3)
-        palavras = [gerar_palavra(caminho_fonte, tamanho_fonte) for _ in range(num_palavras)]
-        frase = ' '.join(palavras)
-        largura_frase = obter_largura_pixel_texto(frase, caminho_fonte, tamanho_fonte)
-        if largura_frase == largura_desejada:
-            return frase
-        elif largura_frase > largura_desejada:
-            continue  # Ignora frases muito longas
+def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=1000):
+    space_width = get_text_pixel_width(' ', font_path, font_size)
+    for _ in range(max_attempts):
+        num_words = random.randint(1, 3)
+        words = [generate_word(font_path, font_size) for _ in range(num_words)]
+        sentence = ' '.join(words)
+        sentence_width = get_text_pixel_width(sentence, font_path, font_size)
+        if sentence_width == desired_width:
+            return sentence
+        elif sentence_width > desired_width:
+            continue  # Skip sentences that are too long
 
-    return None  # Retorna None se não encontrar uma frase com a largura desejada dentro de max_tentativas
+    return None  # Return None if unable to find sentence of desired width within max_attempts
 
-def main(largura_desejada):
-    caminho_fonte = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf'
-    tamanho_fonte = 10
+def main(desired_width):
+    font_path = '/usr/share/fonts/truetype/alegreya-sc/AlegreyaSansSC-Black.ttf'
+    font_size = 10
     try:
-        largura_desejada = int(largura_desejada)
-        frases = []
+        desired_width = int(desired_width)
+        sentences = []
         for _ in range(50):
-            frase = gerar_frase_com_largura(largura_desejada, caminho_fonte, tamanho_fonte)
-            if frase:
-                frases.append(frase)
+            sentence = generate_sentence_with_width(desired_width, font_path, font_size)
+            if sentence:
+                sentences.append(sentence)
             else:
-                print(f"Não foi possível gerar uma frase com largura de {largura_desejada} pixels.")
+                print(f"Unable to generate a sentence with width {desired_width} pixels.")
                 break
 
-        texto_resumo = f"Geradas {len(frases)} frases com largura de {largura_desejada} pixels:\n\n"
-        for frase in frases:
-            texto_resumo += f"{frase}\n"
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as arquivo_resumo:
-            arquivo_resumo.write(texto_resumo)
-        print(texto_resumo)
+        summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
+        for sentence in sentences:
+            summary_text += f"{sentence}\n"
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+            summary_file.write(summary_text)
+        print(summary_text)
     except IOError:
-        print(f"Arquivo de fonte '{caminho_fonte}' não encontrado. Certifique-se de que o arquivo de fonte esteja presente no diretório ou atualize o caminho da fonte.")
+        print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
     except ValueError:
-        print("Forneça um número inteiro válido para a largura desejada.")
+        print("Please provide a valid integer for the desired width.")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Uso: python Pixel_box_final_generator.py <largura_desejada>")
+        print("Usage: python Pixel_box_final_generator.py <desired_width>")
         sys.exit(1)
-    largura_desejada = sys.argv[1]
-    main(largura_desejada)
+    desired_width = sys.argv[1]
+    main(desired_width)
