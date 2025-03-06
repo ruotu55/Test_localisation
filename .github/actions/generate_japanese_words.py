@@ -2,10 +2,11 @@
 import random
 import sys
 
-chinese_characters = list("的一是不了人我在有他这来上大为和国地到以说时事要就出而可里后自都于之也家用能好下那年学起都就你我他她是谁很小么什么多少先生今天星期几号再见喜欢高兴漂亮") # A more extensive Chinese character list could be used
+# A more extensive Korean character list could be used
+korean_characters = list("가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐기니디리미비시이지치키티피히개내대래매배새애재채캐태패해게네데레메베세에제체케테페헤괴뇌되뢰뫼뵈쇠외죄최쾨퇴폐회")
 
-def generate_random_chinese_word(length):
-    return ''.join(random.choice(chinese_characters) for _ in range(length))
+def generate_random_korean_word(length):
+    return ''.join(random.choice(korean_characters) for _ in range(length))
 
 if __name__ == "__main__":
     try:
@@ -13,8 +14,8 @@ if __name__ == "__main__":
             length = int(sys.argv[1])
         else:
             raise ValueError("No length provided")
-        words = [generate_random_chinese_word(length) for _ in range(11)]
-        print("Generated Chinese words:")
+        words = [generate_random_korean_word(length) for _ in range(11)]
+        print("Generated Korean words:")
         for word in words:
             print(word)
     except ValueError:
