@@ -1,31 +1,41 @@
-name: Gerador de Strings
+# .github/workflows/localization_generator.yml
+name: String Generator
 
 on:
   workflow_dispatch:
     inputs:
-      largura_desejada:
-        description: 'Largura desejada de cada palavra gerada em pixels'
+      desired_width:
+        description: 'Desired width of each generated word in pixels'
         required: true
 
 jobs:
-  verificacao_localizacao:
+  localization_check:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout do repositório
+      - name: Checkout the repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Configurar Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Instalar dependências
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Executar Pixel_box_final_generator
-        run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.largura_desejada }}"
+      - name: Install Alegreya Sans SC font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget fontconfig
+          wget https://github.com/google/fonts/raw/main/ofl/alegreyasanssc/AlegreyaSansSC-Black.ttf -O AlegreyaSansSC-Black.ttf
+          sudo mkdir -p /usr/share/fonts/truetype/alegreya-sc
+          sudo mv AlegreyaSansSC-Black.ttf /usr/share/fonts/truetype/alegreya-sc/
+          sudo fc-cache -fv
+
+      - name: Run Pixel_box_final_generator
+        run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.desired_width }}"
