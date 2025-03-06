@@ -2,11 +2,11 @@
 import random
 import sys
 
-# A more extensive Korean character list could be used
-korean_characters = list("가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐기니디리미비시이지치키티피히개내대래매배새애재채캐태패해게네데레메베세에제체케테페헤괴뇌되뢰뫼뵈쇠외죄최쾨퇴폐회")
+# เพิ่มรายการตัวอักษรภาษาไทยที่ครอบคลุม
+thai_characters = list("กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮะัาำิีึืุูเแโใไ่้๊๋ฯๆ์ํ็่้​")
 
-def generate_random_korean_word(length):
-    return ''.join(random.choice(korean_characters) for _ in range(length))
+def generate_random_thai_word(length):
+    return ''.join(random.choice(thai_characters) for _ in range(length))
 
 if __name__ == "__main__":
     try:
@@ -14,8 +14,8 @@ if __name__ == "__main__":
             length = int(sys.argv[1])
         else:
             raise ValueError("No length provided")
-        words = [generate_random_korean_word(length) for _ in range(11)]
-        print("Generated Korean words:")
+        words = [generate_random_thai_word(length) for _ in range(11)]
+        print("Generated Thai words:")
         for word in words:
             print(word)
     except ValueError:
