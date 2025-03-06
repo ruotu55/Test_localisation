@@ -28,14 +28,5 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Install NanumGothic font
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget fontconfig
-          wget https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf -O NanumGothic-Regular.ttf
-          sudo mkdir -p /usr/share/fonts/truetype/nanum
-          sudo mv NanumGothic-Regular.ttf /usr/share/fonts/truetype/nanum/
-          sudo fc-cache -fv
-
       - name: Run Pixel_box_final_generator
         run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.desired_width }}"
