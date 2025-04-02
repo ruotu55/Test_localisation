@@ -4,11 +4,8 @@ name: String Generator
 on:
   workflow_dispatch:
     inputs:
-      min_width:
-        description: 'Minimum width of each generated word in pixels'
-        required: true
-      max_width:
-        description: 'Maximum width of each generated word in pixels'
+      desired_width:
+        description: 'Desired width of each generated word in pixels'
         required: true
 
 jobs:
@@ -41,4 +38,4 @@ jobs:
           sudo fc-cache -fv
 
       - name: Run Pixel_box_final_generator
-  run: python .github/actions/Pixel_box_final_generator.py ${{ github.event.inputs.min_width }} ${{ github.event.inputs.max_width }}
+        run: python .github/actions/Pixel_box_final_generator.py "${{ github.event.inputs.desired_width }}"
