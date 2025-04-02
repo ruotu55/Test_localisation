@@ -44,7 +44,7 @@ def main(desired_width):
                 sentences.append(sentence)
             else:
                 print(f"Unable to generate a sentence with width {desired_width} pixels.")
-                break
+                # Removed the break statement here
 
         summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
         for sentence in sentences:
@@ -56,10 +56,3 @@ def main(desired_width):
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
     except ValueError:
         print("Please provide a valid integer for the desired width.")
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python Pixel_box_final_generator.py <desired_width>")
-        sys.exit(1)
-    desired_width = sys.argv[1]
-    main(desired_width)
