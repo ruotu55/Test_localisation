@@ -18,14 +18,14 @@ def generate_word(font_path, font_size):
     word = ''.join(random.choice(letters) for _ in range(length))
     return word.capitalize()  # Capitalize the first letter of each word
 
-def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=1000):
+def generate_sentence_with_width(desired_width, font_path, font_size, max_attempts=10000): # Increased max_attempts
     space_width = get_text_pixel_width(' ', font_path, font_size)
     for _ in range(max_attempts):
-        num_words = random.randint(1, 3)
+        num_words = random.randint(1, 10)  # Increased max word count
         words = [generate_word(font_path, font_size) for _ in range(num_words)]
         sentence = ' '.join(words)
         sentence_width = get_text_pixel_width(sentence, font_path, font_size)
-        if sentence_width == desired_width:
+        if abs(sentence_width - desired_width) < 5:  # Added tolerance
             return sentence
         elif sentence_width > desired_width:
             continue  # Skip sentences that are too long
@@ -44,13 +44,14 @@ def main(desired_width):
                 sentences.append(sentence)
             else:
                 print(f"Unable to generate a sentence with width {desired_width} pixels.")
-                break
+                #break # remove break, to keep trying other iterations.
 
         summary_text = f"Generated {len(sentences)} sentences with the width of {desired_width} pixels:\n\n"
         for sentence in sentences:
             summary_text += f"{sentence}\n"
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
-            summary_file.write(summary_text)
+        if 'GITHUB_STEP_SUMMARY' in os.environ:
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary_file:
+              summary_file.write(summary_text)
         print(summary_text)
     except IOError:
         print(f"Font file '{font_path}' not found. Please make sure the font file is present in the directory or update the font path.")
