@@ -1,0 +1,116 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f7f6;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align content to the top */
+    min-height: 100vh; /* Ensure body takes full viewport height */
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 900px;
+    box-sizing: border-box;
+}
+
+h1, h2 {
+    color: #0056b3;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.input-section, .results-section, .processed-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+input[type="text"] {
+    width: calc(100% - 22px); /* Account for padding and border */
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#clearProcessed {
+    background-color: #dc3545; /* Red for clear button */
+}
+
+#clearProcessed:hover {
+    background-color: #c82333;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+ul li {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    word-wrap: break-word; /* Allow long URLs to wrap */
+    white-space: normal; /* Ensure text wraps */
+}
+
+ul li.processed-item {
+    background-color: #d1e7dd; /* Lighter green for processed items */
+    color: #0f5132;
+    border: 1px solid #badbcc;
+}
+
+ul li a {
+    color: #007bff;
+    text-decoration: none;
+    word-break: break-all; /* Break long words (like URLs) */
+}
+
+ul li a:hover {
+    text-decoration: underline;
+}
+
+/* Optional: Add some responsiveness */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+    }
+    input[type="text"], button {
+        font-size: 14px;
+    }
+}
