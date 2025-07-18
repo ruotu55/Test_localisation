@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Automation Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Video Content Finder</h1>
+
+        <div class="input-section">
+            <label for="subjectInput">Enter Subject (e.g., "viral pranks"):</label>
+            <input type="text" id="subjectInput" placeholder="Type your subject here...">
+            <button id="searchButton">Search Videos</button>
+        </div>
+
+        <div class="results-section">
+            <h2>Found Videos</h2>
+            <ul id="videoResults">
+                <li>No videos found yet. Try a search!</li>
+            </ul>
+        </div>
+
+        <div class="processed-section">
+            <h2>Processed Videos (Simulated)</h2>
+            <ul id="processedVideos">
+                <li>No videos processed yet.</li>
+            </ul>
+            <button id="clearProcessed">Clear Processed List</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
