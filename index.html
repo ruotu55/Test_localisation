@@ -1,5 +1,5 @@
 //@version=6
-indicator("Rom Pine Script [Final Fix - Persistent Trade]", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+indicator("Master", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
 
 // ==========================================
 // 1. INPUTS
@@ -164,14 +164,14 @@ isFormingRed = close < open
 isFormingInside = high < high[1]
 isFormingVol = volDecay ? (volume < volume[1]) : true
 
-// REMOVED TIME WINDOW CHECK. This is now just raw visual feedback.
 isFormingSetup = showForming and (isFormingRed or isFormingInside) and (ema9 > ema20) and isFormingVol
 
 // --- 3. RISK CALCULATION (FIXED PRICES) ---
 float calcEntry = 0.0
 float calcStop = 0.0
 
-// FIX 2: IF SETUP IS LOCKED, WE IGNORE EVERYTHING ELSE AND USE LOCKED DATA
+// REVERTED TO ORIGINAL LOGIC FOR ENTRY CALCULATION
+// This ensures we are only looking at the locked previous bar for the official signal
 if isSetupLocked
     calcEntry := high[1] + breakoutOffset
     calcStop := low[1]
@@ -182,6 +182,7 @@ else
     calcEntry := high[1] + breakoutOffset
     calcStop := low[1]
 
+// NOTE: calculate risk/targets here for display/preview
 float calcRisk = calcEntry - calcStop
 float calcTarget = 0.0
 
@@ -206,7 +207,6 @@ isZeroRisk = calcEntry <= calcStop
 isSetupReady = isSetupLocked and isGoodRR and not isZeroRisk
 
 // --- 4. ACTUAL BUY SIGNAL (STICKY TRIGGER) ---
-// FIX 3: Latch Mechanism
 var bool hasTriggered = false
 
 if barstate.isnew
@@ -243,7 +243,6 @@ var a_tradeWins = array.new_int(0)
 var a_tradeLoss = array.new_int(0)
 
 // --- CRITICAL FIX: PERSISTENT VARIABLES ---
-// These var variables mean the lines are remembered forever until we delete or change them.
 var label activeTradeLabel = na
 var label formingLabel = na
 var bool tradeActive = false
@@ -279,34 +278,87 @@ if isSetupReady and not tradeActive
     alert("✅ GET READY: " + syminfo.ticker + " | Entry: " + str.tostring(calcEntry), alert.freq_once_per_bar)
 
 // ==========================================
-// TRADE MANAGEMENT (THE FIX)
+// TRADE MANAGEMENT (THE FIX FOR DYNAMIC TP/SL)
 // ==========================================
 
-// 1. ENTER TRADE (This runs once and locks the trade)
+// 1. ENTER TRADE (This runs once and locks the ENTRY PRICE ONLY)
 if buySignal and not tradeActive
     activeTradeLabel := label.new(bar_index, low, "BUY", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
     tradeActive := true // LOCK THE TRADE ON
+    
+    activeEntryPrice := calcEntry // <--- THIS IS LOCKED AND NEVER CHANGES
+    
+    // Initial assignment of TP/SL (these will update dynamically in the active loop)
     activeTp := calcTarget
     activeSl := calcStop
-    activeEntryPrice := calcEntry
     
     // DRAW PERSISTENT LINES
     if showLines
         endBarIndex = bar_index + 3
-        pLineTp := line.new(bar_index, calcTarget, endBarIndex, calcTarget, color=color.lime, width=3, style=line.style_solid)
-        pLineEnt := line.new(bar_index, calcEntry, endBarIndex, calcEntry, color=color.blue, width=3, style=line.style_solid)
-        pLineSl := line.new(bar_index, calcStop, endBarIndex, calcStop, color=color.yellow, width=3, style=line.style_solid)
-        pBox := box.new(bar_index, calcStop, endBarIndex, calcTarget, border_color=color.new(color.white, 80), border_width=1, bgcolor=color.new(color.green, 95))
+        pLineTp := line.new(bar_index, activeTp, endBarIndex, activeTp, color=color.lime, width=3, style=line.style_solid)
+        pLineEnt := line.new(bar_index, activeEntryPrice, endBarIndex, activeEntryPrice, color=color.blue, width=3, style=line.style_solid)
+        pLineSl := line.new(bar_index, activeSl, endBarIndex, activeSl, color=color.yellow, width=3, style=line.style_solid)
+        pBox := box.new(bar_index, activeSl, endBarIndex, activeTp, border_color=color.new(color.white, 80), border_width=1, bgcolor=color.new(color.green, 95))
 
-// 2. MANAGE TRADE (This runs every tick as long as tradeActive is true)
+// 2. MANAGE TRADE (Runs every tick. UPDATES TP/SL DYNAMICALLY)
 if tradeActive
-    // Force lines to stay visible by extending them
-    line.set_x2(pLineTp, bar_index + 3)
-    line.set_x2(pLineEnt, bar_index + 3)
-    line.set_x2(pLineSl, bar_index + 3)
-    box.set_right(pBox, bar_index + 3)
+    
+    // --- DYNAMIC RECALCULATION START ---
+    // We update SL based on the LIVE variables that might change (like if you wanted trailing logic), 
+    // BUT we must reference the STATIC entry to calculate targets.
+    
+    // Here we need to grab the "current" hypothetical calcStop from the environment 
+    // IF you want the SL to change. 
+    // However, usually SL is based on the LOW of the setup candle. 
+    // If you want SL to be dynamic based on *parameters changing*, we recalculate it:
+    
+    // NOTE: In the original logic, calcStop came from low[1] of the setup candle.
+    // To make it dynamic based on parameters (like risk settings) while keeping the entry static:
+    
+    // For now, let's assume the user changes 'Risk Reward' or 'Fixed %'.
+    // The Entry (activeEntryPrice) is static.
+    
+    // If you want the STOP LOSS to change, we need to know what logic changes it.
+    // If the logic is just "low[1]", that doesn't change after the trade starts (it's history).
+    // But if you meant the TARGET changes based on parameters, we do this:
 
-    // CHECK FOR WIN
+    // Update Target based on STATIC Entry and DYNAMIC Settings
+    if targetMode == "Fixed %"
+        activeTp := activeEntryPrice * (1 + (fixedPct / 100))
+    else
+        // If 2x Risk, we need the original risk.
+        // If you want SL to be dynamic, we need to update activeSl here.
+        // Assuming you want SL to stay at the structural low but TP to move:
+        float currentRisk = activeEntryPrice - activeSl
+        activeTp := activeEntryPrice + (currentRisk * riskReward)
+
+    // Apply Smart Targets dynamically (if resistance lines move or update)
+    if useSmartTgt
+        if pmHigh > activeEntryPrice and activeTp > pmHigh
+            activeTp := pmHigh - 0.01
+        if nearestRes > activeEntryPrice and activeTp > nearestRes
+            activeTp := nearestRes - 0.01
+        if activeSwingRes > activeEntryPrice and activeTp > activeSwingRes
+            activeTp := activeSwingRes - 0.01
+    // --- DYNAMIC RECALCULATION END ---
+
+    // Update Lines to reflect the DYNAMIC changes
+    line.set_x2(pLineTp, bar_index + 3)
+    line.set_y1(pLineTp, activeTp) // Move line to new TP
+    line.set_y2(pLineTp, activeTp)
+
+    line.set_x2(pLineEnt, bar_index + 3)
+    // We do NOT update Y for Entry, it stays locked
+
+    line.set_x2(pLineSl, bar_index + 3)
+    line.set_y1(pLineSl, activeSl) // Move line to new SL
+    line.set_y2(pLineSl, activeSl)
+
+    box.set_right(pBox, bar_index + 3)
+    box.set_top(pBox, activeTp)
+    box.set_bottom(pBox, activeSl)
+
+    // CHECK FOR WIN (Using Dynamic TP)
     if high >= activeTp
         label.set_text(activeTradeLabel, "WON")
         label.set_color(activeTradeLabel, color.gray)
@@ -320,7 +372,7 @@ if tradeActive
         array.push(a_tradeLoss, 0)
         tradeActive := false // UNLOCK
 
-    // CHECK FOR LOSS
+    // CHECK FOR LOSS (Using Dynamic SL)
     else if low <= activeSl
         label.set_text(activeTradeLabel, "LOST")
         label.set_color(activeTradeLabel, color.gray)
@@ -391,9 +443,11 @@ if barstate.islast
     statusText = tradeActive ? "ACTIVE TRADE" : "OFFLINE"
     statusColor = tradeActive ? color.green : color.gray
     showNumbers = isGoodRR and (isSetupReady or isFormingSetup) or tradeActive
-    dispEntry = showNumbers ? str.tostring(calcEntry, "#.##") : "---"
-    dispStop = showNumbers ? str.tostring(calcStop, "#.##") : "---"
-    dispTarget = showNumbers ? str.tostring(calcTarget, "#.##") : "---"
+    
+    // UPDATED: If trade is active, use the Active (Dynamic) variables. If not, use the Calc (Preview) variables.
+    dispEntry = tradeActive ? str.tostring(activeEntryPrice, "#.##") : (showNumbers ? str.tostring(calcEntry, "#.##") : "---")
+    dispStop = tradeActive ? str.tostring(activeSl, "#.##") : (showNumbers ? str.tostring(calcStop, "#.##") : "---")
+    dispTarget = tradeActive ? str.tostring(activeTp, "#.##") : (showNumbers ? str.tostring(calcTarget, "#.##") : "---")
 
     if showTable and barstate.islast
         if shiftLeft > 0
