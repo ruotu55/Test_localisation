@@ -1,37 +1,426 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Automation Assistant</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Video Content Finder</h1>
+//@version=6
+indicator("Rom Pine Script [Final Fix - Persistent Trade]", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
 
-        <div class="input-section">
-            <label for="subjectInput">Enter Subject (e.g., "viral pranks"):</label>
-            <input type="text" id="subjectInput" placeholder="Type your subject here...">
-            <button id="searchButton">Search Videos</button>
-        </div>
+// ==========================================
+// 1. INPUTS
+// ==========================================
+grp1 = "1. Strategy & Patterns"
+usePullback = input.bool(true, "Trade Micro Pullbacks?", group=grp1)
+useVwap = input.bool(true, "Trade VWAP Breakouts?", group=grp1)
+volDecay = input.bool(true, "Require Light Vol on Pullback?", group=grp1)
 
-        <div class="results-section">
-            <h2>Found Videos</h2>
-            <ul id="videoResults">
-                <li>No videos found yet. Try a search!</li>
-            </ul>
-        </div>
+grp2 = "2. Visuals & Safety"
+showLines = input.bool(true, "Show Stop/Target Lines", group=grp2)
+showTable = input.bool(true, "Show Dashboard", group=grp2)
+showRes = input.bool(true, "Show PM High (Blue Line)", group=grp2)
+showPsych = input.bool(true, "Show Psych Levels ($0.50s)", group=grp2)
+showForming = input.bool(true, "Show 'Forming' Warning?", tooltip="Alerts you on the LIVE candle before it closes", group=grp2)
 
-        <div class="processed-section">
-            <h2>Processed Videos (Simulated)</h2>
-            <ul id="processedVideos">
-                <li>No videos processed yet.</li>
-            </ul>
-            <button id="clearProcessed">Clear Processed List</button>
-        </div>
-    </div>
+// NEW CONTEXT FILTERS
+breakoutOffset = input.float(0.02, "Breakout Offset ($)", minval=0.0, step=0.01, group=grp2, tooltip="Price must break High by this amount to trigger")
+maxWickRatio = input.float(2.0, "Max Wick Rejection Ratio", group=grp2, tooltip="Reject setup if Upper Wick is > 2x the Body size")
+minSlope = input.float(0.02, "Min EMA Slope", step=0.01, group=grp2, tooltip="Prevents trading in flat markets. Increase for expensive stocks.")
+maxBodyRatio = input.float(1.5, "Max Pullback Body Ratio", group=grp2, tooltip="Rejects setup if the red candle is too big (Reversal vs Pullback)")
 
-    <script src="script.js"></script>
-</body>
-</html>
+// STANDARD SAFETY
+maxExt = input.float(1.5, "Max Extension %", group=grp2)
+avoidRes = input.bool(true, "Avoid Buying Into Resistance?", group=grp2)
+resBuffer = input.float(1.0, "Resistance Buffer %", group=grp2)
+strictVol = input.bool(true, "Strict Volume? (No Heavy Selling)", group=grp2)
+
+grp3 = "3. Profit Taking & R:R"
+targetMode = input.string("Fixed %", "Target Strategy", options=["2x Risk", "Fixed %"], group=grp3)
+fixedPct = input.float(10.0, "Fixed Target %", group=grp3)
+riskReward = input.float(2.0, "Target Ratio (If 2x Risk selected)", group=grp3)
+minTradeRatio = input.float(0.5, "⛔ Min R:R to Enter", step=0.1, group=grp3)
+useSmartTgt = input.bool(true, "Use Smart Targets? (Lower Tgt at Res)", group=grp3)
+shareSize = input.int(250, "Share Size for P&L", group=grp3)
+
+// POSITION
+tablePosInput = input.string("Top Right", "Table Anchor", options=["Top Right", "Top Center", "Middle Right"], group=grp2)
+shiftLeft = input.int(5, "Shift Left %", minval=0, maxval=50, group=grp2)
+shiftDown = input.int(0, "Shift Down", minval=0, maxval=10, group=grp2)
+
+// ==========================================
+// 2. CALCULATIONS
+// ==========================================
+volAvg = ta.sma(volume, 30)
+rvol = (volAvg > 0) ? volume / volAvg : 0
+
+// Previous Day Data
+prevClose = request.security(syminfo.tickerid, "D", close[1])
+prevHigh = request.security(syminfo.tickerid, "D", high[1])
+
+// Indicators
+ema9 = ta.ema(close, 9)
+ema20 = ta.ema(close, 20)
+vwapVal = ta.vwap(close)
+[macdLine, signalLine, macdHist] = ta.macd(close, 12, 26, 9)
+
+// --- STABILITY FIX: CONTEXT INDICATORS (LOCKED TO PREVIOUS BAR) ---
+ema9_prev = ema9[1]
+ema20_prev = ema20[1]
+macd_prev = macdLine[1]
+sig_prev = signalLine[1]
+hist_prev = macdHist[1]
+close_prev = close[1]
+open_prev = open[1]
+vol_prev = volume[1]
+volAvg_prev = volAvg[1]
+
+// Live Filters
+bodySize = math.abs(close - open)
+fullRange = high - low
+isChurn = (volume > volAvg * 2) and (bodySize < fullRange * 0.2)
+isNotChurn = not isChurn
+
+// Safe Volume Check (LOCKED)
+isHeavySelling_Prev = (close_prev < open_prev) and (vol_prev > volAvg_prev * 1.2)
+isSafeVol_Locked = strictVol ? not isHeavySelling_Prev : true
+
+// --- FIX 1: LOCK HALT RISK TO PREVIOUS BAR ---
+move3min_Locked = ((close[1] - close[4]) / close[4]) * 100
+isHaltRisk_Locked = move3min_Locked > 8.0
+
+distFromEma = ((close[1] - ema9[1]) / ema9[1]) * 100
+isSafeExt = distFromEma < maxExt
+
+// Context
+t_pm = time("D", "0400-0930")
+isPM = not na(t_pm)
+var float pmHigh = 0.0
+if isPM and high > pmHigh
+    pmHigh := high
+if dayofmonth != dayofmonth[1]
+    pmHigh := 0.0
+
+swingHigh = ta.pivothigh(high, 5, 3)
+var float lastSwingRes = 0.0
+if not na(swingHigh)
+    lastSwingRes := swingHigh
+activeSwingRes = (lastSwingRes > close) ? lastSwingRes : 0.0
+
+// Psych Levels
+float refPrice = high[1]
+float nextWhole = math.ceil(refPrice)
+float nextHalf = math.floor(refPrice) + 0.50
+
+if nextHalf <= refPrice
+    nextHalf := nextHalf + 0.50
+if nextWhole <= refPrice
+    nextWhole := nextWhole + 1.0
+
+float nearestRes = math.min(nextWhole, nextHalf)
+
+// ==========================================
+// 3. PREDICTIVE LOGIC
+// ==========================================
+
+// --- 1. HISTORICAL (LOCKED) SETUP CHECK ---
+entryLvl = high[1]
+distToPM = (pmHigh > entryLvl) ? ((pmHigh - entryLvl) / entryLvl) * 100 : 100.0
+distToPsych = ((nearestRes - entryLvl) / entryLvl) * 100
+distToSwing = (activeSwingRes > entryLvl) ? ((activeSwingRes - entryLvl) / entryLvl) * 100 : 100.0
+
+isSafeRes = true
+if avoidRes
+    if (distToPM < resBuffer) or (distToPsych < resBuffer) or (distToSwing < resBuffer)
+        isSafeRes := false
+
+// Trend Structure
+isTrendStructure_Locked = (ema9_prev > ema20_prev)
+isMacdGood_Locked = macd_prev > sig_prev
+
+// Pattern Setup
+isRed = close[1] < open[1]
+isInside = high[1] < high[2]
+volCheck = volDecay ? (volume[1] < volume[2]) : true
+isProperPullback = high[1] <= high[2]
+
+// --- A. WICK FILTER ---
+prev_body = math.abs(close[1] - open[1])
+prev_uwick = high[1] - math.max(close[1], open[1])
+safe_body = prev_body == 0 ? 0.01 : prev_body
+isWickBad = (prev_uwick > (safe_body * maxWickRatio))
+
+// --- B. EMA SLOPE FILTER ---
+emaSlope = (ema9 - ema9[3])
+isSlopeStrong = emaSlope > minSlope
+
+// --- C. BIG RED CANDLE FILTER ---
+avgBody = ta.sma(math.abs(close - open), 10)
+currBody = math.abs(close[1] - open[1])
+isBodyTooBig = currBody > (avgBody * maxBodyRatio)
+
+// --- D. MOMENTUM STRENGTH FILTER ---
+isMomStrong = hist_prev > 0
+
+// --- "GET READY" CONDITION (ALL PREV BAR DATA) ---
+isSetupLocked = usePullback and (isRed or isInside) and isProperPullback and isTrendStructure_Locked and volCheck and isSafeRes and isSafeVol_Locked and isMacdGood_Locked and not isHaltRisk_Locked and not isWickBad and isSlopeStrong and not isBodyTooBig and isMomStrong
+
+// --- 2. FORMING SETUP LOGIC (LIVE CANDLE) ---
+
+isFormingRed = close < open
+isFormingInside = high < high[1]
+isFormingVol = volDecay ? (volume < volume[1]) : true
+
+// REMOVED TIME WINDOW CHECK. This is now just raw visual feedback.
+isFormingSetup = showForming and (isFormingRed or isFormingInside) and (ema9 > ema20) and isFormingVol
+
+// --- 3. RISK CALCULATION (FIXED PRICES) ---
+float calcEntry = 0.0
+float calcStop = 0.0
+
+// FIX 2: IF SETUP IS LOCKED, WE IGNORE EVERYTHING ELSE AND USE LOCKED DATA
+if isSetupLocked
+    calcEntry := high[1] + breakoutOffset
+    calcStop := low[1]
+else if isFormingSetup
+    calcEntry := high + breakoutOffset
+    calcStop := low
+else
+    calcEntry := high[1] + breakoutOffset
+    calcStop := low[1]
+
+float calcRisk = calcEntry - calcStop
+float calcTarget = 0.0
+
+if targetMode == "Fixed %"
+    calcTarget := calcEntry * (1 + (fixedPct / 100))
+else
+    calcTarget := calcEntry + (calcRisk * riskReward)
+
+if useSmartTgt
+    if pmHigh > calcEntry and calcTarget > pmHigh
+        calcTarget := pmHigh - 0.01
+    if nearestRes > calcEntry and calcTarget > nearestRes
+        calcTarget := nearestRes - 0.01
+    if activeSwingRes > calcEntry and calcTarget > activeSwingRes
+        calcTarget := activeSwingRes - 0.01
+
+rewardAmt = calcTarget - calcEntry
+isGoodRR = rewardAmt >= (calcRisk * minTradeRatio)
+isZeroRisk = calcEntry <= calcStop
+
+// Refine locked status to include RR
+isSetupReady = isSetupLocked and isGoodRR and not isZeroRisk
+
+// --- 4. ACTUAL BUY SIGNAL (STICKY TRIGGER) ---
+// FIX 3: Latch Mechanism
+var bool hasTriggered = false
+
+if barstate.isnew
+    hasTriggered := false
+
+triggerTouch = high >= calcEntry
+isAboveVwap = high > vwapVal
+
+// If we haven't triggered yet, check all conditions.
+if not hasTriggered and isSetupReady and triggerTouch and isNotChurn and isAboveVwap
+    hasTriggered := true
+
+// VWAP Signal
+sigVwap = useVwap and (close[1] < vwapVal) and (close > vwapVal) and (volume > volAvg * 1.5) and (close > high[1]) and isGoodRR and not isZeroRisk
+
+buySignal = hasTriggered or sigVwap
+
+// ==========================================
+// 4. PLOTTING & TRADE MANAGEMENT
+// ==========================================
+
+plotshape(isChurn and high > ema9, title="Churn Warning", location=location.abovebar, color=color.orange, style=shape.circle, size=size.tiny)
+
+if barstate.islast
+    if showRes and pmHigh > 0
+        line.new(bar_index, pmHigh, bar_index+5, pmHigh, color=color.new(color.blue, 50), style=line.style_dashed, width=1)
+    if showPsych
+        line.new(bar_index, nextWhole, bar_index+5, nextWhole, color=color.new(color.gray, 70), style=line.style_dotted)
+        line.new(bar_index, nextHalf, bar_index+5, nextHalf, color=color.new(color.gray, 70), style=line.style_dotted)
+
+var a_tradeTimes = array.new_int(0)
+var a_tradePnLs = array.new_float(0)
+var a_tradeWins = array.new_int(0)
+var a_tradeLoss = array.new_int(0)
+
+// --- CRITICAL FIX: PERSISTENT VARIABLES ---
+// These var variables mean the lines are remembered forever until we delete or change them.
+var label activeTradeLabel = na
+var label formingLabel = na
+var bool tradeActive = false
+var float activeTp = 0.0
+var float activeSl = 0.0
+var float activeEntryPrice = 0.0
+
+var line pLineTp = na
+var line pLineEnt = na
+var line pLineSl = na
+var box pBox = na
+
+label.delete(formingLabel)
+
+// --- PREVIEW LINES LOGIC ---
+var line previewTp = na
+var line previewEntry = na
+var line previewStop = na
+
+if barstate.islast
+    line.delete(previewTp)
+    line.delete(previewEntry)
+    line.delete(previewStop)
+    
+    // Only show preview if no active trade
+    if (isFormingSetup or isSetupReady) and not tradeActive and isGoodRR
+        previewTp := line.new(bar_index, calcTarget, bar_index+5, calcTarget, color=color.lime, style=line.style_solid, width=2)
+        previewEntry := line.new(bar_index, calcEntry, bar_index+5, calcEntry, color=color.blue, style=line.style_solid, width=2)
+        previewStop := line.new(bar_index, calcStop, bar_index+5, calcStop, color=color.yellow, style=line.style_solid, width=2)
+
+// --- ALERT LOGIC ---
+if isSetupReady and not tradeActive
+    alert("✅ GET READY: " + syminfo.ticker + " | Entry: " + str.tostring(calcEntry), alert.freq_once_per_bar)
+
+// ==========================================
+// TRADE MANAGEMENT (THE FIX)
+// ==========================================
+
+// 1. ENTER TRADE (This runs once and locks the trade)
+if buySignal and not tradeActive
+    activeTradeLabel := label.new(bar_index, low, "BUY", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
+    tradeActive := true // LOCK THE TRADE ON
+    activeTp := calcTarget
+    activeSl := calcStop
+    activeEntryPrice := calcEntry
+    
+    // DRAW PERSISTENT LINES
+    if showLines
+        endBarIndex = bar_index + 3
+        pLineTp := line.new(bar_index, calcTarget, endBarIndex, calcTarget, color=color.lime, width=3, style=line.style_solid)
+        pLineEnt := line.new(bar_index, calcEntry, endBarIndex, calcEntry, color=color.blue, width=3, style=line.style_solid)
+        pLineSl := line.new(bar_index, calcStop, endBarIndex, calcStop, color=color.yellow, width=3, style=line.style_solid)
+        pBox := box.new(bar_index, calcStop, endBarIndex, calcTarget, border_color=color.new(color.white, 80), border_width=1, bgcolor=color.new(color.green, 95))
+
+// 2. MANAGE TRADE (This runs every tick as long as tradeActive is true)
+if tradeActive
+    // Force lines to stay visible by extending them
+    line.set_x2(pLineTp, bar_index + 3)
+    line.set_x2(pLineEnt, bar_index + 3)
+    line.set_x2(pLineSl, bar_index + 3)
+    box.set_right(pBox, bar_index + 3)
+
+    // CHECK FOR WIN
+    if high >= activeTp
+        label.set_text(activeTradeLabel, "WON")
+        label.set_color(activeTradeLabel, color.gray)
+        label.set_textcolor(activeTradeLabel, color.white)
+        float totalComm = shareSize * 0.02
+        float grossPnl = (activeTp - activeEntryPrice) * shareSize
+        float netPnl = grossPnl - totalComm
+        array.push(a_tradeTimes, time)
+        array.push(a_tradePnLs, netPnl)
+        array.push(a_tradeWins, 1)
+        array.push(a_tradeLoss, 0)
+        tradeActive := false // UNLOCK
+
+    // CHECK FOR LOSS
+    else if low <= activeSl
+        label.set_text(activeTradeLabel, "LOST")
+        label.set_color(activeTradeLabel, color.gray)
+        label.set_textcolor(activeTradeLabel, color.white)
+        float totalComm = shareSize * 0.02
+        float grossPnl = (activeSl - activeEntryPrice) * shareSize
+        float netPnl = grossPnl - totalComm
+        array.push(a_tradeTimes, time)
+        array.push(a_tradePnLs, netPnl)
+        array.push(a_tradeWins, 0)
+        array.push(a_tradeLoss, 1)
+        tradeActive := false // UNLOCK
+
+// STATUS LABELS
+if isSetupReady and not tradeActive and barstate.islast
+    label.new(bar_index, low, "GET READY", color=color.yellow, textcolor=color.black, style=label.style_label_up, yloc=yloc.belowbar)
+
+if isFormingSetup and not tradeActive and barstate.islast and not isSetupReady and isGoodRR
+    formingLabel := label.new(bar_index, low, "⚠️ FORMING", color=color.orange, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
+
+// ==========================================
+// 5. DASHBOARD
+// ==========================================
+var int d_wins = 0
+var int d_loss = 0
+var float d_pnl = 0.0
+
+if barstate.islast
+    d_wins := 0
+    d_loss := 0
+    d_pnl := 0.0
+    if array.size(a_tradeTimes) > 0
+        for i = 0 to array.size(a_tradeTimes) - 1
+            t_time = array.get(a_tradeTimes, i)
+            if t_time > (timenow - 86400000)
+                d_wins := d_wins + array.get(a_tradeWins, i)
+                d_loss := d_loss + array.get(a_tradeLoss, i)
+                d_pnl := d_pnl + array.get(a_tradePnLs, i)
+
+    tablePos = tablePosInput == "Top Center" ? position.top_center : tablePosInput == "Middle Right" ? position.middle_right : position.top_right
+    var table dashboard = table.new(tablePos, 6, 4 + shiftDown, bgcolor=color.new(color.black, 0), frame_color=color.white, frame_width=0)
+    
+    readyColor = isSetupReady ? color.green : color.red
+    readyText = isSetupReady ? "READY" : "WAIT"
+
+    if isFormingSetup and not isSetupReady and isGoodRR
+        readyColor := color.orange
+        readyText := "FORMING"
+    else if not isGoodRR and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "BAD R:R"
+    else if isWickBad and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "BAD WICK"
+    else if not isSlopeStrong and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "FLAT EMA"
+    else if isBodyTooBig and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "BIG RED"
+    else if not isMomStrong and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "WEAK MOM"
+    else if not isProperPullback and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "BAD STRUCT"
+
+    statusText = tradeActive ? "ACTIVE TRADE" : "OFFLINE"
+    statusColor = tradeActive ? color.green : color.gray
+    showNumbers = isGoodRR and (isSetupReady or isFormingSetup) or tradeActive
+    dispEntry = showNumbers ? str.tostring(calcEntry, "#.##") : "---"
+    dispStop = showNumbers ? str.tostring(calcStop, "#.##") : "---"
+    dispTarget = showNumbers ? str.tostring(calcTarget, "#.##") : "---"
+
+    if showTable and barstate.islast
+        if shiftLeft > 0
+            table.cell(dashboard, 0, 0 + shiftDown, "", width = shiftLeft, bgcolor = color.new(color.black, 100))
+        table.cell(dashboard, 1, 0 + shiftDown, "24H PERF", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+        table.cell(dashboard, 2, 0 + shiftDown, "TRADE VALUES", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+        table.cell(dashboard, 3, 0 + shiftDown, "VALUES", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+        table.cell(dashboard, 4, 0 + shiftDown, "GET READY", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+        table.cell(dashboard, 5, 0 + shiftDown, "STATUS", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+        
+        wlString = str.tostring(d_wins) + " W / " + str.tostring(d_loss) + " L"
+        table.cell(dashboard, 1, 1 + shiftDown, wlString, text_color=color.white, text_size=size.small, bgcolor=color.new(color.black, 50))
+        table.cell(dashboard, 2, 1 + shiftDown, "Take Profit", text_color=color.lime, text_size=size.small, bgcolor=color.new(color.black, 50))
+        table.cell(dashboard, 3, 1 + shiftDown, dispTarget, text_color=color.white, text_size=size.small, bgcolor=color.new(color.green, 80))
+        table.cell(dashboard, 4, 1 + shiftDown, readyText, text_color=color.white, text_size=size.small, bgcolor=readyColor)
+        table.cell(dashboard, 5, 1 + shiftDown, statusText, text_color=color.white, text_size=size.small, bgcolor=statusColor)
+
+        pnlColor = d_pnl >= 0 ? color.green : color.red
+        table.cell(dashboard, 1, 2 + shiftDown, "$" + str.tostring(d_pnl, "#.##"), text_color=color.white, text_size=size.small, bgcolor=pnlColor)
+
+        table.cell(dashboard, 2, 2 + shiftDown, "Buy / Entry", text_color=color.blue, text_size=size.small, bgcolor=color.new(color.black, 50))
+        table.cell(dashboard, 3, 2 + shiftDown, dispEntry, text_color=color.white, text_size=size.small, bgcolor=color.new(color.blue, 80))
+        table.cell(dashboard, 4, 2 + shiftDown, "", bgcolor=readyColor)
+        table.cell(dashboard, 5, 2 + shiftDown, "", bgcolor=statusColor)
+        
+        table.cell(dashboard, 1, 3 + shiftDown, "", bgcolor=color.new(color.black, 100))
+        table.cell(dashboard, 2, 3 + shiftDown, "Stop Loss", text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.black, 50))
+        table.cell(dashboard, 3, 3 + shiftDown, dispStop, text_color=color.white, text_size=size.small, bgcolor=color.new(color.yellow, 80))
+        table.cell(dashboard, 4, 3 + shiftDown, "", bgcolor=readyColor)
+        table.cell(dashboard, 5, 3 + shiftDown, "", bgcolor=statusColor)
