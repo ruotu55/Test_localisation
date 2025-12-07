@@ -9,6 +9,9 @@ usePullback = input.bool(true, "Trade Micro Pullbacks?", group=grp1)
 useVwap = input.bool(true, "Trade VWAP Breakouts?", group=grp1)
 volDecay = input.bool(true, "Require Light Vol on Pullback?", group=grp1)
 
+// --- NEW: THE POLE FIX (To stop bad signals) ---
+minSurgePct = input.float(0.8, "Min Surge % (The Pole)", step=0.1, group=grp1, tooltip="Price must rise by this % before the pullback to validate the setup.")
+
 grp2 = "2. Visuals & Safety"
 showLines = input.bool(true, "Show Stop/Target Lines", group=grp2)
 showTable = input.bool(true, "Show Dashboard", group=grp2)
@@ -137,6 +140,12 @@ isInside = high[1] < high[2]
 volCheck = volDecay ? (volume[1] < volume[2]) : true
 isProperPullback = high[1] <= high[2]
 
+// *** NEW: THE POLE (SURGE) CHECK ***
+// Logic: Calculate % move of the 3 candles BEFORE the pullback
+surgeMove = ((high[1] - open[4]) / open[4]) * 100
+// Check: Did we move at least X%?
+isSurge_Locked = surgeMove >= minSurgePct
+
 // --- A. WICK FILTER ---
 prev_body = math.abs(close[1] - open[1])
 prev_uwick = high[1] - math.max(close[1], open[1])
@@ -156,7 +165,8 @@ isBodyTooBig = currBody > (avgBody * maxBodyRatio)
 isMomStrong = hist_prev > 0
 
 // --- "GET READY" CONDITION (ALL PREV BAR DATA) ---
-isSetupLocked = usePullback and (isRed or isInside) and isProperPullback and isTrendStructure_Locked and volCheck and isSafeRes and isSafeVol_Locked and isMacdGood_Locked and not isHaltRisk_Locked and not isWickBad and isSlopeStrong and not isBodyTooBig and isMomStrong
+// ADDED "isSurge_Locked" to ensure we are not trading chop
+isSetupLocked = usePullback and (isRed or isInside) and isProperPullback and isTrendStructure_Locked and volCheck and isSafeRes and isSafeVol_Locked and isMacdGood_Locked and not isHaltRisk_Locked and not isWickBad and isSlopeStrong and not isBodyTooBig and isMomStrong and isSurge_Locked
 
 // --- 2. FORMING SETUP LOGIC (LIVE CANDLE) ---
 
@@ -249,6 +259,7 @@ var bool tradeActive = false
 var float activeTp = 0.0
 var float activeSl = 0.0
 var float activeEntryPrice = 0.0
+var string activeMethod = "" // NEW: Stores the method of the trade
 
 var line pLineTp = na
 var line pLineEnt = na
@@ -283,7 +294,14 @@ if isSetupReady and not tradeActive
 
 // 1. ENTER TRADE (This runs once and locks the ENTRY PRICE ONLY)
 if buySignal and not tradeActive
-    activeTradeLabel := label.new(bar_index, low, "BUY", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
+    
+    // DETECT METHOD BEFORE LABELING
+    if sigVwap
+        activeMethod := "VWAP"
+    else
+        activeMethod := "PULLBACK"
+
+    activeTradeLabel := label.new(bar_index, low, "BUY\n" + activeMethod, color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
     tradeActive := true // LOCK THE TRADE ON
     
     activeEntryPrice := calcEntry // <--- THIS IS LOCKED AND NEVER CHANGES
@@ -304,31 +322,11 @@ if buySignal and not tradeActive
 if tradeActive
     
     // --- DYNAMIC RECALCULATION START ---
-    // We update SL based on the LIVE variables that might change (like if you wanted trailing logic), 
-    // BUT we must reference the STATIC entry to calculate targets.
-    
-    // Here we need to grab the "current" hypothetical calcStop from the environment 
-    // IF you want the SL to change. 
-    // However, usually SL is based on the LOW of the setup candle. 
-    // If you want SL to be dynamic based on *parameters changing*, we recalculate it:
-    
-    // NOTE: In the original logic, calcStop came from low[1] of the setup candle.
-    // To make it dynamic based on parameters (like risk settings) while keeping the entry static:
-    
-    // For now, let's assume the user changes 'Risk Reward' or 'Fixed %'.
-    // The Entry (activeEntryPrice) is static.
-    
-    // If you want the STOP LOSS to change, we need to know what logic changes it.
-    // If the logic is just "low[1]", that doesn't change after the trade starts (it's history).
-    // But if you meant the TARGET changes based on parameters, we do this:
-
     // Update Target based on STATIC Entry and DYNAMIC Settings
     if targetMode == "Fixed %"
         activeTp := activeEntryPrice * (1 + (fixedPct / 100))
     else
         // If 2x Risk, we need the original risk.
-        // If you want SL to be dynamic, we need to update activeSl here.
-        // Assuming you want SL to stay at the structural low but TP to move:
         float currentRisk = activeEntryPrice - activeSl
         activeTp := activeEntryPrice + (currentRisk * riskReward)
 
@@ -360,7 +358,7 @@ if tradeActive
 
     // CHECK FOR WIN (Using Dynamic TP)
     if high >= activeTp
-        label.set_text(activeTradeLabel, "WON")
+        label.set_text(activeTradeLabel, "WON\n" + activeMethod) // ADDED METHOD
         label.set_color(activeTradeLabel, color.gray)
         label.set_textcolor(activeTradeLabel, color.white)
         float totalComm = shareSize * 0.02
@@ -374,7 +372,7 @@ if tradeActive
 
     // CHECK FOR LOSS (Using Dynamic SL)
     else if low <= activeSl
-        label.set_text(activeTradeLabel, "LOST")
+        label.set_text(activeTradeLabel, "LOST\n" + activeMethod) // ADDED METHOD
         label.set_color(activeTradeLabel, color.gray)
         label.set_textcolor(activeTradeLabel, color.white)
         float totalComm = shareSize * 0.02
@@ -424,6 +422,9 @@ if barstate.islast
     else if not isGoodRR and (isSetupReady or isFormingSetup)
         readyColor := color.red
         readyText := "BAD R:R"
+    else if not isSurge_Locked and (isSetupReady or isFormingSetup)
+        readyColor := color.red
+        readyText := "NO SURGE"
     else if isWickBad and (isSetupReady or isFormingSetup)
         readyColor := color.red
         readyText := "BAD WICK"
