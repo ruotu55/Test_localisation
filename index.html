@@ -1,482 +1,303 @@
 //@version=6
-indicator("Master", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+indicator("Rom Master - Bull Flag", overlay=true)
 
-// ==========================================
-// 1. INPUTS
-// ==========================================
-grp1 = "1. Strategy & Patterns"
-usePullback = input.bool(true, "Trade Micro Pullbacks?", group=grp1)
-useVwap = input.bool(true, "Trade VWAP Breakouts?", group=grp1)
-volDecay = input.bool(true, "Require Light Vol on Pullback?", group=grp1)
+// ====================================
+// CONFIGURATION & GLOBAL VARIABLES
+// ====================================
 
-// --- NEW: THE POLE FIX (To stop bad signals) ---
-minSurgePct = input.float(0.8, "Min Surge % (The Pole)", step=0.1, group=grp1, tooltip="Price must rise by this % before the pullback to validate the setup.")
+// --- MONEY MANAGEMENT SETTINGS ---
+int trade_qty = input.int(250, "Trade Share Size", group="Money Management")
+float commission_per_share = input.float(0.02, "Commission (Per Share - Round Trip)", group="Money Management", tooltip="Cost per share for a round-trip trade (buy + sell). Example: 0.02 means $50 commission for 2500 shares.")
+int cooldown = input.int(2, "Cooldown Bars", group="Money Management")
 
-grp2 = "2. Visuals & Safety"
-showLines = input.bool(true, "Show Stop/Target Lines", group=grp2)
-showTable = input.bool(true, "Show Dashboard", group=grp2)
-showRes = input.bool(true, "Show PM High (Blue Line)", group=grp2)
-showPsych = input.bool(true, "Show Psych Levels ($0.50s)", group=grp2)
-showForming = input.bool(true, "Show 'Forming' Warning?", tooltip="Alerts you on the LIVE candle before it closes", group=grp2)
+// --- PERFORMANCE TRACKING SETTING ---
+int lookback_days = input.int(7, "Performance Lookback (Days)", minval=1, group="Configuration", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
 
-// NEW CONTEXT FILTERS
-breakoutOffset = input.float(0.02, "Breakout Offset ($)", minval=0.0, step=0.01, group=grp2, tooltip="Price must break High by this amount to trigger")
-maxWickRatio = input.float(2.0, "Max Wick Rejection Ratio", group=grp2, tooltip="Reject setup if Upper Wick is > 2x the Body size")
-minSlope = input.float(0.02, "Min EMA Slope", step=0.01, group=grp2, tooltip="Prevents trading in flat markets. Increase for expensive stocks.")
-maxBodyRatio = input.float(1.5, "Max Pullback Body Ratio", group=grp2, tooltip="Rejects setup if the red candle is too big (Reversal vs Pullback)")
+// --- PATTERN SETTINGS ---
+int flag_min_bars = 1
+int flag_max_bars = 5 
 
-// STANDARD SAFETY
-maxExt = input.float(1.5, "Max Extension %", group=grp2)
-avoidRes = input.bool(true, "Avoid Buying Into Resistance?", group=grp2)
-resBuffer = input.float(1.0, "Resistance Buffer %", group=grp2)
-strictVol = input.bool(true, "Strict Volume? (No Heavy Selling)", group=grp2)
+// --- FILTERS (TOGGLES) ---
+bool use_breakout   = input.bool(true, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line.")
+bool use_green_bar  = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
+bool use_no_trade   = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
+bool use_cooldown   = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
+bool use_depth_filter = input.bool(true, "Max Pullback Depth (30%)?", group="Entry Filters", tooltip="ON = The pullback must not exceed 30% of the FULL surge length.\nOFF = Ignore pullback depth (allow deeper pullbacks).")
+bool use_vol_check    = input.bool(true, "Flag Volume < Pole Volume?", group="Entry Filters", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
+bool use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="Entry Filters", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
 
-grp3 = "3. Profit Taking & R:R"
-targetMode = input.string("Fixed %", "Target Strategy", options=["2x Risk", "Fixed %"], group=grp3)
-fixedPct = input.float(10.0, "Fixed Target %", group=grp3)
-riskReward = input.float(2.0, "Target Ratio (If 2x Risk selected)", group=grp3)
-minTradeRatio = input.float(0.5, "⛔ Min R:R to Enter", step=0.1, group=grp3)
-useSmartTgt = input.bool(true, "Use Smart Targets? (Lower Tgt at Res)", group=grp3)
-shareSize = input.int(250, "Share Size for P&L", group=grp3)
+// SMAs
+float vol_ma_10 = ta.sma(volume, 10)
 
-// POSITION
-tablePosInput = input.string("Top Right", "Table Anchor", options=["Top Right", "Top Center", "Middle Right"], group=grp2)
-shiftLeft = input.int(5, "Shift Left %", minval=0, maxval=50, group=grp2)
-shiftDown = input.int(0, "Shift Down", minval=0, maxval=10, group=grp2)
+// Session Performance
+var int cnt_win = 0
+var int cnt_loss = 0
+var float net_profit = 0.0
 
-// ==========================================
-// 2. CALCULATIONS
-// ==========================================
-volAvg = ta.sma(volume, 30)
-rvol = (volAvg > 0) ? volume / volAvg : 0
+// Trade Values
+var bool in_trade = false
+var float tp_price = na
+var float entry_price = na
+var float sl_price = na
 
-// Previous Day Data
-prevClose = request.security(syminfo.tickerid, "D", close[1])
-prevHigh = request.security(syminfo.tickerid, "D", high[1])
+// COOLDOWN TRACKING
+var int last_exit_bar = -999
 
-// Indicators
-ema9 = ta.ema(close, 9)
-ema20 = ta.ema(close, 20)
-vwapVal = ta.vwap(close)
-[macdLine, signalLine, macdHist] = ta.macd(close, 12, 26, 9)
+// Status Text
+var string status_txt = "Waiting"
 
-// --- STABILITY FIX: CONTEXT INDICATORS (LOCKED TO PREVIOUS BAR) ---
-ema9_prev = ema9[1]
-ema20_prev = ema20[1]
-macd_prev = macdLine[1]
-sig_prev = signalLine[1]
-hist_prev = macdHist[1]
-close_prev = close[1]
-open_prev = open[1]
-vol_prev = volume[1]
-volAvg_prev = volAvg[1]
+// Visual Object References
+var line l_entry = na
+var line l_tp = na
+var line l_sl = na
+var box b_risk = na
+var label active_trade_label = na // New variable to track the current trade's label
 
-// Live Filters
-bodySize = math.abs(close - open)
-fullRange = high - low
-isChurn = (volume > volAvg * 2) and (bodySize < fullRange * 0.2)
-isNotChurn = not isChurn
+// Arrays for Weekly/Lookback Reset
+var line[] weekly_lines = array.new_line()
+var box[] weekly_boxes = array.new_box()
+var label[] weekly_labels = array.new_label()
 
-// Safe Volume Check (LOCKED)
-isHeavySelling_Prev = (close_prev < open_prev) and (vol_prev > volAvg_prev * 1.2)
-isSafeVol_Locked = strictVol ? not isHeavySelling_Prev : true
+// ====================================
+// LOOKBACK RESET LOGIC
+// ====================================
 
-// --- FIX 1: LOCK HALT RISK TO PREVIOUS BAR ---
-move3min_Locked = ((close[1] - close[4]) / close[4]) * 100
-isHaltRisk_Locked = move3min_Locked > 8.0
+// Calculate the timestamp for the start of the lookback period
+int lookback_ms = lookback_days * 86400000 // Days to milliseconds (86400000 ms per day)
+int lookback_start_time = time - lookback_ms
 
-distFromEma = ((close[1] - ema9[1]) / ema9[1]) * 100
-isSafeExt = distFromEma < maxExt
+// Check if the current bar's time is the first bar *after* the lookback period starts
+// This acts as the anchor point for the lookback reset
+bool is_reset_bar = time[1] < lookback_start_time and time >= lookback_start_time and barstate.isfirst
 
-// Context
-t_pm = time("D", "0400-0930")
-isPM = not na(t_pm)
-var float pmHigh = 0.0
-if isPM and high > pmHigh
-    pmHigh := high
-if dayofmonth != dayofmonth[1]
-    pmHigh := 0.0
-
-swingHigh = ta.pivothigh(high, 5, 3)
-var float lastSwingRes = 0.0
-if not na(swingHigh)
-    lastSwingRes := swingHigh
-activeSwingRes = (lastSwingRes > close) ? lastSwingRes : 0.0
-
-// Psych Levels
-float refPrice = high[1]
-float nextWhole = math.ceil(refPrice)
-float nextHalf = math.floor(refPrice) + 0.50
-
-if nextHalf <= refPrice
-    nextHalf := nextHalf + 0.50
-if nextWhole <= refPrice
-    nextWhole := nextWhole + 1.0
-
-float nearestRes = math.min(nextWhole, nextHalf)
-
-// ==========================================
-// 3. PREDICTIVE LOGIC
-// ==========================================
-
-// --- 1. HISTORICAL (LOCKED) SETUP CHECK ---
-entryLvl = high[1]
-distToPM = (pmHigh > entryLvl) ? ((pmHigh - entryLvl) / entryLvl) * 100 : 100.0
-distToPsych = ((nearestRes - entryLvl) / entryLvl) * 100
-distToSwing = (activeSwingRes > entryLvl) ? ((activeSwingRes - entryLvl) / entryLvl) * 100 : 100.0
-
-isSafeRes = true
-if avoidRes
-    if (distToPM < resBuffer) or (distToPsych < resBuffer) or (distToSwing < resBuffer)
-        isSafeRes := false
-
-// Trend Structure
-isTrendStructure_Locked = (ema9_prev > ema20_prev)
-isMacdGood_Locked = macd_prev > sig_prev
-
-// Pattern Setup
-isRed = close[1] < open[1]
-isInside = high[1] < high[2]
-volCheck = volDecay ? (volume[1] < volume[2]) : true
-isProperPullback = high[1] <= high[2]
-
-// *** NEW: THE POLE (SURGE) CHECK ***
-surgeMove = ((high[1] - open[4]) / open[4]) * 100
-isSurge_Locked = surgeMove >= minSurgePct
-
-// --- A. WICK FILTER ---
-prev_body = math.abs(close[1] - open[1])
-prev_uwick = high[1] - math.max(close[1], open[1])
-safe_body = prev_body == 0 ? 0.01 : prev_body
-isWickBad = (prev_uwick > (safe_body * maxWickRatio))
-
-// --- B. EMA SLOPE FILTER ---
-emaSlope = (ema9 - ema9[3])
-isSlopeStrong = emaSlope > minSlope
-
-// --- C. BIG RED CANDLE FILTER ---
-avgBody = ta.sma(math.abs(close - open), 10)
-currBody = math.abs(close[1] - open[1])
-isBodyTooBig = currBody > (avgBody * maxBodyRatio)
-
-// --- D. MOMENTUM STRENGTH FILTER ---
-isMomStrong = hist_prev > 0
-
-// --- "GET READY" CONDITION ---
-isSetupLocked = usePullback and (isRed or isInside) and isProperPullback and isTrendStructure_Locked and volCheck and isSafeRes and isSafeVol_Locked and isMacdGood_Locked and not isHaltRisk_Locked and not isWickBad and isSlopeStrong and not isBodyTooBig and isMomStrong and isSurge_Locked
-
-// --- 2. FORMING SETUP LOGIC (LIVE CANDLE) ---
-
-isFormingRed = close < open
-isFormingInside = high < high[1]
-isFormingVol = volDecay ? (volume < volume[1]) : true
-
-isFormingSetup = showForming and (isFormingRed or isFormingInside) and (ema9 > ema20) and isFormingVol
-
-// --- 3. RISK CALCULATION (FIXED PRICES) ---
-float calcEntry = 0.0
-float calcStop = 0.0
-
-if isSetupLocked
-    calcEntry := high[1] + breakoutOffset
-    calcStop := low[1]
-else if isFormingSetup
-    calcEntry := high + breakoutOffset
-    calcStop := low
-else
-    calcEntry := high[1] + breakoutOffset
-    calcStop := low[1]
-
-// NOTE: calculate risk/targets here for display/preview
-float calcRisk = calcEntry - calcStop
-float calcTarget = 0.0
-
-if targetMode == "Fixed %"
-    calcTarget := calcEntry * (1 + (fixedPct / 100))
-else
-    calcTarget := calcEntry + (calcRisk * riskReward)
-
-if useSmartTgt
-    if pmHigh > calcEntry and calcTarget > pmHigh
-        calcTarget := pmHigh - 0.01
-    if nearestRes > calcEntry and calcTarget > nearestRes
-        calcTarget := nearestRes - 0.01
-    if activeSwingRes > calcEntry and calcTarget > activeSwingRes
-        calcTarget := activeSwingRes - 0.01
-
-rewardAmt = calcTarget - calcEntry
-isGoodRR = rewardAmt >= (calcRisk * minTradeRatio)
-isZeroRisk = calcEntry <= calcStop
-
-// Refine locked status to include RR
-isSetupReady = isSetupLocked and isGoodRR and not isZeroRisk
-
-// --- 4. ACTUAL BUY SIGNAL (STICKY TRIGGER) ---
-var bool hasTriggered = false
-
-if barstate.isnew
-    hasTriggered := false
-
-triggerTouch = high >= calcEntry
-isAboveVwap = high > vwapVal
-
-if not hasTriggered and isSetupReady and triggerTouch and isNotChurn and isAboveVwap
-    hasTriggered := true
-
-// VWAP Signal
-sigVwap = useVwap and (close[1] < vwapVal) and (close > vwapVal) and (volume > volAvg * 1.5) and (close > high[1]) and isGoodRR and not isZeroRisk
-
-buySignal = hasTriggered or sigVwap
-
-// ==========================================
-// 4. PLOTTING & TRADE MANAGEMENT
-// ==========================================
-
-plotshape(isChurn and high > ema9, title="Churn Warning", location=location.abovebar, color=color.orange, style=shape.circle, size=size.tiny)
-
-if barstate.islast
-    if showRes and pmHigh > 0
-        line.new(bar_index, pmHigh, bar_index+5, pmHigh, color=color.new(color.blue, 50), style=line.style_dashed, width=1)
-    if showPsych
-        line.new(bar_index, nextWhole, bar_index+5, nextWhole, color=color.new(color.gray, 70), style=line.style_dotted)
-        line.new(bar_index, nextHalf, bar_index+5, nextHalf, color=color.new(color.gray, 70), style=line.style_dotted)
-
-var a_tradeTimes = array.new_int(0)
-var a_tradePnLs = array.new_float(0)
-var a_tradeWins = array.new_int(0)
-var a_tradeLoss = array.new_int(0)
-
-// --- CRITICAL FIX: PERSISTENT VARIABLES ---
-var label activeTradeLabel = na
-var label formingLabel = na
-var bool tradeActive = false
-var float activeTp = 0.0
-var float activeSl = 0.0
-var float activeEntryPrice = 0.0
-var string activeMethod = "" 
-
-var line pLineTp = na
-var line pLineEnt = na
-var line pLineSl = na
-var box pBox = na
-
-label.delete(formingLabel)
-
-// --- PREVIEW LINES LOGIC ---
-var line previewTp = na
-var line previewEntry = na
-var line previewStop = na
-
-if barstate.islast
-    line.delete(previewTp)
-    line.delete(previewEntry)
-    line.delete(previewStop)
+if is_reset_bar
+    // Reset counters
+    cnt_win := 0
+    cnt_loss := 0
+    net_profit := 0.0
+    status_txt := "Waiting"
     
-    // Only show preview if no active trade
-    if (isFormingSetup or isSetupReady) and not tradeActive and isGoodRR
-        previewTp := line.new(bar_index, calcTarget, bar_index+5, calcTarget, color=color.lime, style=line.style_solid, width=2)
-        previewEntry := line.new(bar_index, calcEntry, bar_index+5, calcEntry, color=color.blue, style=line.style_solid, width=2)
-        previewStop := line.new(bar_index, calcStop, bar_index+5, calcStop, color=color.yellow, style=line.style_solid, width=2)
-
-// --- ALERT LOGIC ---
-if isSetupReady and not tradeActive
-    alert("✅ GET READY: " + syminfo.ticker + " | Entry: " + str.tostring(calcEntry), alert.freq_once_per_bar)
-
-// ==========================================
-// TRADE MANAGEMENT 
-// ==========================================
-
-// 1. ENTER TRADE
-if buySignal and not tradeActive
-    
-    if sigVwap
-        activeMethod := "VWAP"
-    else
-        activeMethod := "PULLBACK"
-
-    activeTradeLabel := label.new(bar_index, low, "BUY\n" + activeMethod, color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
-    tradeActive := true 
-    
-    activeEntryPrice := calcEntry 
-    
-    activeTp := calcTarget
-    activeSl := calcStop
-    
-    if showLines
-        endBarIndex = bar_index + 3
-        pLineTp := line.new(bar_index, activeTp, endBarIndex, activeTp, color=color.lime, width=3, style=line.style_solid)
-        pLineEnt := line.new(bar_index, activeEntryPrice, endBarIndex, activeEntryPrice, color=color.blue, width=3, style=line.style_solid)
-        pLineSl := line.new(bar_index, activeSl, endBarIndex, activeSl, color=color.yellow, width=3, style=line.style_solid)
-        pBox := box.new(bar_index, activeSl, endBarIndex, activeTp, border_color=color.new(color.white, 80), border_width=1, bgcolor=color.new(color.green, 95))
-
-// 2. MANAGE TRADE
-if tradeActive
-    
-    // --- DYNAMIC RECALCULATION START ---
-    if targetMode == "Fixed %"
-        activeTp := activeEntryPrice * (1 + (fixedPct / 100))
-    else
-        float currentRisk = activeEntryPrice - activeSl
-        activeTp := activeEntryPrice + (currentRisk * riskReward)
-
-    if useSmartTgt
-        if pmHigh > activeEntryPrice and activeTp > pmHigh
-            activeTp := pmHigh - 0.01
-        if nearestRes > activeEntryPrice and activeTp > nearestRes
-            activeTp := nearestRes - 0.01
-        if activeSwingRes > activeEntryPrice and activeTp > activeSwingRes
-            activeTp := activeSwingRes - 0.01
-    // --- DYNAMIC RECALCULATION END ---
-
-    line.set_x2(pLineTp, bar_index + 3)
-    line.set_y1(pLineTp, activeTp) 
-    line.set_y2(pLineTp, activeTp)
-
-    line.set_x2(pLineEnt, bar_index + 3)
-
-    line.set_x2(pLineSl, bar_index + 3)
-    line.set_y1(pLineSl, activeSl) 
-    line.set_y2(pLineSl, activeSl)
-
-    box.set_right(pBox, bar_index + 3)
-    box.set_top(pBox, activeTp)
-    box.set_bottom(pBox, activeSl)
-
-    // CHECK FOR WIN
-    if high >= activeTp
-        label.set_text(activeTradeLabel, "WON\n" + activeMethod) 
-        label.set_color(activeTradeLabel, color.gray)
-        label.set_textcolor(activeTradeLabel, color.white)
-        float totalComm = shareSize * 0.02
-        float grossPnl = (activeTp - activeEntryPrice) * shareSize
-        float netPnl = grossPnl - totalComm
-        array.push(a_tradeTimes, time)
-        array.push(a_tradePnLs, netPnl)
-        array.push(a_tradeWins, 1)
-        array.push(a_tradeLoss, 0)
-        tradeActive := false 
-
-    // CHECK FOR LOSS
-    else if low <= activeSl
-        label.set_text(activeTradeLabel, "LOST\n" + activeMethod) 
-        label.set_color(activeTradeLabel, color.gray)
-        label.set_textcolor(activeTradeLabel, color.white)
-        float totalComm = shareSize * 0.02
-        float grossPnl = (activeSl - activeEntryPrice) * shareSize
-        float netPnl = grossPnl - totalComm
-        array.push(a_tradeTimes, time)
-        array.push(a_tradePnLs, netPnl)
-        array.push(a_tradeWins, 0)
-        array.push(a_tradeLoss, 1)
-        tradeActive := false 
-
-// STATUS LABELS
-if isSetupReady and not tradeActive and barstate.islast
-    label.new(bar_index, low, "GET READY", color=color.yellow, textcolor=color.black, style=label.style_label_up, yloc=yloc.belowbar)
-
-if isFormingSetup and not tradeActive and barstate.islast and not isSetupReady and isGoodRR
-    formingLabel := label.new(bar_index, low, "⚠️ FORMING", color=color.orange, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar)
-
-// ==========================================
-// 5. DASHBOARD
-// ==========================================
-var int d_wins = 0
-var int d_loss = 0
-var float d_pnl = 0.0
-
-if barstate.islast
-    d_wins := 0
-    d_loss := 0
-    d_pnl := 0.0
-    
-    // --- UPDATED DATE LOGIC ---
-    // We capture the date of the FINAL bar on the chart (The "Active" trading day)
-    // If today is Sunday, the last bar is Friday, so these vars will hold Friday's date.
-    lastBarDay = dayofmonth(time)
-    lastBarMonth = month(time)
-    lastBarYear = year(time)
-
-    if array.size(a_tradeTimes) > 0
-        for i = 0 to array.size(a_tradeTimes) - 1
-            t_time = array.get(a_tradeTimes, i)
-            
-            // Extract date of the specific trade
-            t_day = dayofmonth(t_time)
-            t_month = month(t_time)
-            t_year = year(t_time)
-            
-            // COMPARE: Does the trade happen on the SAME DAY as the last bar on chart?
-            if t_day == lastBarDay and t_month == lastBarMonth and t_year == lastBarYear
-                d_wins := d_wins + array.get(a_tradeWins, i)
-                d_loss := d_loss + array.get(a_tradeLoss, i)
-                d_pnl := d_pnl + array.get(a_tradePnLs, i)
-
-    tablePos = tablePosInput == "Top Center" ? position.top_center : tablePosInput == "Middle Right" ? position.middle_right : position.top_right
-    var table dashboard = table.new(tablePos, 6, 4 + shiftDown, bgcolor=color.new(color.black, 0), frame_color=color.white, frame_width=0)
-    
-    readyColor = isSetupReady ? color.green : color.red
-    readyText = isSetupReady ? "READY" : "WAIT"
-
-    if isFormingSetup and not isSetupReady and isGoodRR
-        readyColor := color.orange
-        readyText := "FORMING"
-    else if not isGoodRR and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "BAD R:R"
-    else if not isSurge_Locked and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "NO SURGE"
-    else if isWickBad and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "BAD WICK"
-    else if not isSlopeStrong and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "FLAT EMA"
-    else if isBodyTooBig and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "BIG RED"
-    else if not isMomStrong and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "WEAK MOM"
-    else if not isProperPullback and (isSetupReady or isFormingSetup)
-        readyColor := color.red
-        readyText := "BAD STRUCT"
-
-    statusText = tradeActive ? "ACTIVE TRADE" : "OFFLINE"
-    statusColor = tradeActive ? color.green : color.gray
-    showNumbers = isGoodRR and (isSetupReady or isFormingSetup) or tradeActive
-    
-    dispEntry = tradeActive ? str.tostring(activeEntryPrice, "#.##") : (showNumbers ? str.tostring(calcEntry, "#.##") : "---")
-    dispStop = tradeActive ? str.tostring(activeSl, "#.##") : (showNumbers ? str.tostring(calcStop, "#.##") : "---")
-    dispTarget = tradeActive ? str.tostring(activeTp, "#.##") : (showNumbers ? str.tostring(calcTarget, "#.##") : "---")
-
-    if showTable and barstate.islast
-        if shiftLeft > 0
-            table.cell(dashboard, 0, 0 + shiftDown, "", width = shiftLeft, bgcolor = color.new(color.black, 100))
-        // Changed Text from "24H PERF" to "SESSION PERF"
-        table.cell(dashboard, 1, 0 + shiftDown, "SESSION PERF", text_color=color.white, text_size=size.small, bgcolor=color.gray)
-        table.cell(dashboard, 2, 0 + shiftDown, "TRADE VALUES", text_color=color.white, text_size=size.small, bgcolor=color.gray)
-        table.cell(dashboard, 3, 0 + shiftDown, "VALUES", text_color=color.white, text_size=size.small, bgcolor=color.gray)
-        table.cell(dashboard, 4, 0 + shiftDown, "GET READY", text_color=color.white, text_size=size.small, bgcolor=color.gray)
-        table.cell(dashboard, 5, 0 + shiftDown, "STATUS", text_color=color.white, text_size=size.small, bgcolor=color.gray)
+    // CRITICAL FIX: Only delete visuals/prices if we are NOT in a trade.
+    // This prevents the active trade lines/labels from disappearing.
+    if not in_trade
+        entry_price := na
+        tp_price := na
+        sl_price := na
         
-        wlString = str.tostring(d_wins) + " W / " + str.tostring(d_loss) + " L"
-        table.cell(dashboard, 1, 1 + shiftDown, wlString, text_color=color.white, text_size=size.small, bgcolor=color.new(color.black, 50))
-        table.cell(dashboard, 2, 1 + shiftDown, "Take Profit", text_color=color.lime, text_size=size.small, bgcolor=color.new(color.black, 50))
-        table.cell(dashboard, 3, 1 + shiftDown, dispTarget, text_color=color.white, text_size=size.small, bgcolor=color.new(color.green, 80))
-        table.cell(dashboard, 4, 1 + shiftDown, readyText, text_color=color.white, text_size=size.small, bgcolor=readyColor)
-        table.cell(dashboard, 5, 1 + shiftDown, statusText, text_color=color.white, text_size=size.small, bgcolor=statusColor)
-
-        pnlColor = d_pnl >= 0 ? color.green : color.red
-        table.cell(dashboard, 1, 2 + shiftDown, "$" + str.tostring(d_pnl, "#.##"), text_color=color.white, text_size=size.small, bgcolor=pnlColor)
-
-        table.cell(dashboard, 2, 2 + shiftDown, "Buy / Entry", text_color=color.blue, text_size=size.small, bgcolor=color.new(color.black, 50))
-        table.cell(dashboard, 3, 2 + shiftDown, dispEntry, text_color=color.white, text_size=size.small, bgcolor=color.new(color.blue, 80))
-        table.cell(dashboard, 4, 2 + shiftDown, "", bgcolor=readyColor)
-        table.cell(dashboard, 5, 2 + shiftDown, "", bgcolor=statusColor)
+        last_exit_bar := -999
         
-        table.cell(dashboard, 1, 3 + shiftDown, "", bgcolor=color.new(color.black, 100))
-        table.cell(dashboard, 2, 3 + shiftDown, "Stop Loss", text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.black, 50))
-        table.cell(dashboard, 3, 3 + shiftDown, dispStop, text_color=color.white, text_size=size.small, bgcolor=color.new(color.yellow, 80))
-        table.cell(dashboard, 4, 3 + shiftDown, "", bgcolor=readyColor)
-        table.cell(dashboard, 5, 3 + shiftDown, "", bgcolor=statusColor)
+        while array.size(weekly_lines) > 0
+            line.delete(array.pop(weekly_lines))
+        while array.size(weekly_boxes) > 0
+            box.delete(array.pop(weekly_boxes))
+        while array.size(weekly_labels) > 0
+            label.delete(array.pop(weekly_labels))
+
+// ====================================
+// CORE: BULL FLAG PATTERN DETECTION
+// ====================================
+
+find_bull_flag_pattern() =>
+    float ret_sl = na
+    float ret_entry = na
+    float ret_flag_vol = 0.0
+    
+    for f_len = flag_min_bars to flag_max_bars
+        int pole_end_idx = f_len + 1
+        
+        bool is_pole = true
+        for p = 0 to 2
+            int idx = pole_end_idx + p
+            if not (close[idx] > open[idx] and volume[idx] > vol_ma_10[idx])
+                is_pole := false
+        
+        if is_pole
+            float full_surge_high = high[pole_end_idx]
+            float full_surge_low = low[pole_end_idx]
+            float pole_vol_sum = 0.0
+            int pole_bar_count = 0
+            int scan_idx = pole_end_idx
+            
+            while close[scan_idx] > open[scan_idx]
+                if high[scan_idx] > full_surge_high
+                    full_surge_high := high[scan_idx]
+                if low[scan_idx] < full_surge_low
+                    full_surge_low := low[scan_idx]
+                pole_vol_sum += volume[scan_idx]
+                pole_bar_count += 1
+                scan_idx := scan_idx + 1
+                if scan_idx > pole_end_idx + 50 
+                    break
+            
+            bool all_reds = true
+            float lowest_flag_low = high 
+            float flag_vol_sum = 0.0
+            
+            for k = 1 to f_len
+                flag_vol_sum += volume[k]
+                if close[k] >= open[k]
+                    all_reds := false
+                else
+                    if low[k] < lowest_flag_low
+                        lowest_flag_low := low[k]
+            
+            if all_reds
+                float pole_height = full_surge_high - full_surge_low
+                float pullback_depth = full_surge_high - lowest_flag_low
+                float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
+                float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
+                float avg_flag_vol = f_len > 0 ? flag_vol_sum / f_len : 0.0
+                bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
+                
+                if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
+                    ret_entry := high[1]
+                    ret_sl := lowest_flag_low
+                    ret_flag_vol := avg_flag_vol
+                    break 
+
+    [ret_sl, ret_entry, ret_flag_vol]
+
+// ====================================
+// TRADE EXECUTION
+// ====================================
+
+[sl_level, entry_level, flag_avg_vol] = find_bull_flag_pattern()
+
+// Calculate total commission cost for the round trip
+float total_commission_cost = commission_per_share * trade_qty
+
+// --- 1. Exit Management (Updated for Label Change) ---
+if in_trade
+    if low <= sl_price
+        cnt_loss := cnt_loss + 1
+        float gross_loss = (entry_price - sl_price) * trade_qty
+        net_profit := net_profit - (gross_loss + total_commission_cost)
+        in_trade := false
+        last_exit_bar := bar_index
+        status_txt := "Stop Loss Hit"
+        
+        // Update Label to "Lose"
+        if not na(active_trade_label)
+            label.set_text(active_trade_label, "Lose")
+            label.set_color(active_trade_label, color.red)
+            label.set_style(active_trade_label, label.style_label_down)
+            label.set_yloc(active_trade_label, yloc.abovebar)
+
+    else if high >= tp_price
+        cnt_win := cnt_win + 1
+        float gross_profit = (tp_price - entry_price) * trade_qty
+        net_profit := net_profit + (gross_profit - total_commission_cost)
+        in_trade := false
+        last_exit_bar := bar_index
+        status_txt := "Take Profit Hit"
+        
+        // Update Label to "Win"
+        if not na(active_trade_label)
+            label.set_text(active_trade_label, "Win")
+            label.set_color(active_trade_label, color.green)
+            // Style remains label_up for win usually, or change as preferred
+
+// --- 2. Entry Logic ---
+
+bool pattern_found = not na(entry_level) 
+bool cond_breakout = close > entry_level 
+bool cond_green    = close > open        
+bool cond_no_trade = not in_trade
+bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
+bool cond_breakout_vol = volume > flag_avg_vol
+
+bool trigger_buy = pattern_found and 
+                   (not use_breakout or cond_breakout) and 
+                   (not use_green_bar or cond_green) and 
+                   (not use_no_trade or cond_no_trade) and 
+                   (not use_cooldown or cond_cooldown) and
+                   (not use_breakout_vol or cond_breakout_vol)
+
+// Do not trigger a buy if the current bar is outside the lookback period
+if time < lookback_start_time
+    trigger_buy := false
+
+if trigger_buy
+    in_trade := true
+    status_txt := "PIVOT ENTRY"
+    
+    entry_price := entry_level 
+    sl_price := sl_level
+    
+    float risk = entry_price - sl_price
+    if risk <= 0
+        risk := syminfo.mintick * 10
+
+    tp_price := entry_price + (risk * 2)
+
+// ====================================
+// Chart Visuals
+// ====================================
+
+if trigger_buy
+    l_entry := line.new(x1=bar_index, y1=entry_price, x2=bar_index, y2=entry_price, color=color.blue, width=2, style=line.style_solid)
+    l_tp := line.new(x1=bar_index, y1=tp_price, x2=bar_index, y2=tp_price, color=color.green, width=2)
+    l_sl := line.new(x1=bar_index, y1=sl_price, x2=bar_index, y2=sl_price, color=color.red, width=2)
+    b_risk := box.new(left=bar_index, top=tp_price, right=bar_index, bottom=sl_price, bgcolor=color.new(color.teal, 85), border_color=color.teal)
+
+    // Store the specific label for this trade in 'active_trade_label'
+    active_trade_label := label.new(
+         x=bar_index, 
+         y=low, 
+         text="BUY", 
+         color=color.blue, 
+         textcolor=color.white, 
+         style=label.style_label_up, 
+         yloc=yloc.belowbar
+         )
+
+    array.push(weekly_lines, l_entry)
+    array.push(weekly_lines, l_tp)
+    array.push(weekly_lines, l_sl)
+    array.push(weekly_boxes, b_risk)
+    array.push(weekly_labels, active_trade_label)
+
+if in_trade or (bar_index == last_exit_bar)
+    line.set_x2(l_entry, bar_index)
+    line.set_x2(l_tp, bar_index)
+    line.set_x2(l_sl, bar_index)
+    box.set_right(b_risk, bar_index)
+
+// ====================================
+// Table Summary
+// ====================================
+
+var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
+
+if barstate.islast
+    string d_tp = na(tp_price) ? "0.00" : str.tostring(tp_price, format.mintick)
+    string d_entry = na(entry_price) ? "0.00" : str.tostring(entry_price, format.mintick)
+    string d_sl = na(sl_price) ? "0.00" : str.tostring(sl_price, format.mintick)
+
+    table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.small)
+    table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.small)
+    table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.small)
+
+    string wl_text = str.format("{0} W | {1} L", cnt_win, cnt_loss)
+    table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
+    table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
+    table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
+
+    color stat_col = in_trade ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
+    bool cooling_down = not in_trade and (bar_index - last_exit_bar) <= cooldown
+    string display_status = cooling_down ? "Cooldown..." : status_txt
+    table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
+
+    color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
+    string profit_txt = str.tostring(net_profit, format.mintick) + "$"
+    table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
+
+    table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
+    table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
+
+    table.cell(dashboard, 1, 3, "SL:", text_color=color.red, text_halign=text.align_left)
+    table.cell(dashboard, 2, 3, d_sl, text_color=color.white, text_halign=text.align_right)
+
+    table.merge_cells(dashboard, 1, 0, 2, 0)
+    table.merge_cells(dashboard, 0, 2, 0, 3)
+    table.merge_cells(dashboard, 3, 1, 3, 3)
