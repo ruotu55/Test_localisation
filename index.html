@@ -8,7 +8,7 @@ indicator("Rom Master - Bull Flag", overlay=true)
 // --- MONEY MANAGEMENT SETTINGS ---
 int trade_qty = input.int(250, "Trade Share Size", group="Money Management")
 float commission_per_share = input.float(0.02, "Commission (Per Share - Round Trip)", group="Money Management", tooltip="Cost per share for a round-trip trade (buy + sell). Example: 0.02 means $50 commission for 2500 shares.")
-int cooldown = input.int(2, "Cooldown Bars", group="Money Management")
+int cooldown = 2 // Fixed to 2 bars, removed from inputs
 
 // --- PERFORMANCE TRACKING SETTING ---
 int lookback_days = input.int(7, "Performance Lookback (Days)", minval=1, group="Configuration", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
@@ -16,6 +16,7 @@ int lookback_days = input.int(7, "Performance Lookback (Days)", minval=1, group=
 // --- PATTERN SETTINGS ---
 int flag_min_bars = 1
 int flag_max_bars = 5
+int pole_min_bars = input.int(2, "Pole Min Green Bars", minval=1, group="Pattern Settings", tooltip="Minimum number of consecutive green bars with high volume to form a pole.")
 
 // --- FILTERS (TOGGLES) ---
 bool use_breakout = input.bool(true, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line.")
@@ -104,7 +105,8 @@ find_bull_flag_pattern() =>
         int pole_end_idx = f_len + 1
         bool is_pole = true
         
-        for p = 0 to 2
+        // Loop runs based on the Input "Pole Min Green Bars"
+        for p = 0 to pole_min_bars - 1
             int idx = pole_end_idx + p
             if not (close[idx] > open[idx] and volume[idx] > vol_ma_10[idx])
                 is_pole := false
@@ -127,19 +129,45 @@ find_bull_flag_pattern() =>
                 if scan_idx > pole_end_idx + 50
                     break
             
-            bool all_reds = true
+            // --- NEW FLAG LOGIC (Allows 1 Small Green Tip) ---
+            bool is_valid_flag = true
             float lowest_flag_low = high
             float flag_vol_sum = 0.0
+            float potential_entry = na
             
-            for k = 1 to f_len
-                flag_vol_sum += volume[k]
-                if close[k] >= open[k]
-                    all_reds := false
+            // Check if the most recent flag bar (index 1) is Green
+            bool has_green_tip = close[1] > open[1]
+            
+            if has_green_tip
+                // RULE: If tip is green, it must NOT cross the previous Red's high
+                // and the flag must be at least 2 bars long to have a Red behind it.
+                if f_len < 2 or high[1] >= high[2]
+                    is_valid_flag := false
                 else
-                    if low[k] < lowest_flag_low
-                        lowest_flag_low := low[k]
+                    flag_vol_sum += volume[1]
+                    lowest_flag_low := math.min(lowest_flag_low, low[1])
+                    potential_entry := high[2] // Trigger is above the last RED candle
+                    
+                    // The rest (2 to f_len) MUST be Red
+                    for k = 2 to f_len
+                        flag_vol_sum += volume[k]
+                        if close[k] >= open[k]
+                            is_valid_flag := false
+                            break
+                        else
+                            lowest_flag_low := math.min(lowest_flag_low, low[k])
+            else
+                // Standard Case: Bar 1 is Red, so ALL must be Red
+                potential_entry := high[1]
+                for k = 1 to f_len
+                    flag_vol_sum += volume[k]
+                    if close[k] >= open[k]
+                        is_valid_flag := false
+                        break
+                    else
+                        lowest_flag_low := math.min(lowest_flag_low, low[k])
             
-            if all_reds
+            if is_valid_flag
                 float pole_height = full_surge_high - full_surge_low
                 float pullback_depth = full_surge_high - lowest_flag_low
                 float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
@@ -149,7 +177,7 @@ find_bull_flag_pattern() =>
                 bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
                 
                 if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
-                    ret_entry := high[1]
+                    ret_entry := potential_entry
                     ret_sl := lowest_flag_low
                     ret_flag_vol := avg_flag_vol
                     break
