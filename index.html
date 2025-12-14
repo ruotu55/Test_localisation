@@ -19,7 +19,8 @@ int flag_max_bars = 5
 int pole_min_bars = input.int(2, "Pole Min Green Bars", minval=1, group="Pattern Settings", tooltip="Minimum number of consecutive green bars with high volume to form a pole.")
 
 // --- FILTERS (TOGGLES) ---
-bool use_breakout = input.bool(true, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line.")
+// UPDATED: Defaults to FALSE for Immediate Entry
+bool use_breakout = input.bool(false, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line (High >= Entry).")
 bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
 bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
 bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
@@ -28,9 +29,11 @@ bool use_vol_check = input.bool(true, "Flag Volume < Pole Volume?", group="Entry
 bool use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="Entry Filters", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
 bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="Entry Filters", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="Entry Filters", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
+bool use_vwap_filter = input.bool(true, "Price > VWAP?", group="Entry Filters", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
 
 // SMAs & Indicators
 float vol_ma_10 = ta.sma(volume, 10)
+float vwap_val = ta.vwap(close)
 [macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
 
 // Session Performance
@@ -237,20 +240,38 @@ if in_trade
 // --- 2. Entry Logic ---
 
 bool pattern_found = not na(entry_level_adj)
-bool cond_breakout = close > entry_level_adj
+
+// UPDATED LOGIC:
+// If "Wait for Candle Close" (use_breakout) is TRUE, we check CLOSE > ENTRY.
+// If "Wait for Candle Close" is FALSE (Immediate), we check HIGH >= ENTRY (Intra-bar cross).
+bool cond_breakout = use_breakout ? (close > entry_level_adj) : (high >= entry_level_adj)
+
 bool cond_green = close > open
 bool cond_no_trade = not in_trade
 bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
-bool cond_breakout_vol = volume > flag_avg_vol
-bool cond_macd = macd_line > 0 and macd_line > signal_line
 
+// Volume Projection for Real-time Bars
+float volume_check = volume
+if barstate.isrealtime
+    int time_elapsed = timenow - time
+    int time_total = time_close - time
+    // Project volume if we have elapsed time to avoid division by zero
+    if time_elapsed > 0 and time_total > 0
+        volume_check := volume * (time_total / time_elapsed)
+
+bool cond_breakout_vol = volume_check > flag_avg_vol
+bool cond_macd = macd_line > 0 and macd_line > signal_line
+bool cond_vwap = close > vwap_val
+
+// UPDATED TRIGGER: Removed 'not use_breakout or' to ensure price check is always enforced.
 bool trigger_buy = pattern_found and 
-     (not use_breakout or cond_breakout) and 
+     cond_breakout and 
      (not use_green_bar or cond_green) and 
      (not use_no_trade or cond_no_trade) and 
      (not use_cooldown or cond_cooldown) and 
      (not use_breakout_vol or cond_breakout_vol) and 
-     (not use_macd_filter or cond_macd)
+     (not use_macd_filter or cond_macd) and
+     (not use_vwap_filter or cond_vwap)
 
 if time < lookback_start_time
     trigger_buy := false
