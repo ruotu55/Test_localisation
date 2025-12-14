@@ -15,19 +15,23 @@ int lookback_days = input.int(7, "Performance Lookback (Days)", minval=1, group=
 
 // --- PATTERN SETTINGS ---
 int flag_min_bars = 1
-int flag_max_bars = 5 
+int flag_max_bars = 5
 
 // --- FILTERS (TOGGLES) ---
-bool use_breakout   = input.bool(true, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line.")
-bool use_green_bar  = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
-bool use_no_trade   = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
-bool use_cooldown   = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
-bool use_depth_filter = input.bool(true, "Max Pullback Depth (30%)?", group="Entry Filters", tooltip="ON = The pullback must not exceed 30% of the FULL surge length.\nOFF = Ignore pullback depth (allow deeper pullbacks).")
-bool use_vol_check    = input.bool(true, "Flag Volume < Pole Volume?", group="Entry Filters", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
+bool use_breakout = input.bool(true, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line.")
+bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
+bool use_strict_reds = input.bool(true, "Strict Red Candles?", group="Entry Filters", tooltip="ON = All candles in the flag pullback must be Red.\nOFF = Allows Green consolidation candles within the flag.")
+bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
+bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
+bool use_depth_filter = input.bool(true, "Max Pullback Depth (30%)?", group="Entry Filters", tooltip="ON = The pullback must not exceed 30% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
+bool use_vol_check = input.bool(true, "Flag Volume < Pole Volume?", group="Entry Filters", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
 bool use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="Entry Filters", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
+bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="Entry Filters", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
+bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="Entry Filters", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 
-// SMAs
+// SMAs & Indicators
 float vol_ma_10 = ta.sma(volume, 10)
+[macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
 
 // Session Performance
 var int cnt_win = 0
@@ -51,7 +55,7 @@ var line l_entry = na
 var line l_tp = na
 var line l_sl = na
 var box b_risk = na
-var label active_trade_label = na // New variable to track the current trade's label
+var label active_trade_label = na
 
 // Arrays for Weekly/Lookback Reset
 var line[] weekly_lines = array.new_line()
@@ -63,12 +67,10 @@ var label[] weekly_labels = array.new_label()
 // ====================================
 
 // Calculate the timestamp for the start of the lookback period
-int lookback_ms = lookback_days * 86400000 // Days to milliseconds (86400000 ms per day)
-int lookback_start_time = time - lookback_ms
+int lookback_ms = lookback_days * 86400000 // Days to milliseconds
+int lookback_start_time = timenow - lookback_ms
 
-// Check if the current bar's time is the first bar *after* the lookback period starts
-// This acts as the anchor point for the lookback reset
-bool is_reset_bar = time[1] < lookback_start_time and time >= lookback_start_time and barstate.isfirst
+bool is_reset_bar = time[1] < lookback_start_time and time >= lookback_start_time
 
 if is_reset_bar
     // Reset counters
@@ -77,21 +79,18 @@ if is_reset_bar
     net_profit := 0.0
     status_txt := "Waiting"
     
-    // CRITICAL FIX: Only delete visuals/prices if we are NOT in a trade.
-    // This prevents the active trade lines/labels from disappearing.
     if not in_trade
         entry_price := na
         tp_price := na
         sl_price := na
-        
         last_exit_bar := -999
         
-        while array.size(weekly_lines) > 0
-            line.delete(array.pop(weekly_lines))
-        while array.size(weekly_boxes) > 0
-            box.delete(array.pop(weekly_boxes))
-        while array.size(weekly_labels) > 0
-            label.delete(array.pop(weekly_labels))
+    while array.size(weekly_lines) > 0
+        line.delete(array.pop(weekly_lines))
+    while array.size(weekly_boxes) > 0
+        box.delete(array.pop(weekly_boxes))
+    while array.size(weekly_labels) > 0
+        label.delete(array.pop(weekly_labels))
 
 // ====================================
 // CORE: BULL FLAG PATTERN DETECTION
@@ -104,8 +103,8 @@ find_bull_flag_pattern() =>
     
     for f_len = flag_min_bars to flag_max_bars
         int pole_end_idx = f_len + 1
-        
         bool is_pole = true
+        
         for p = 0 to 2
             int idx = pole_end_idx + p
             if not (close[idx] > open[idx] and volume[idx] > vol_ma_10[idx])
@@ -126,20 +125,27 @@ find_bull_flag_pattern() =>
                 pole_vol_sum += volume[scan_idx]
                 pole_bar_count += 1
                 scan_idx := scan_idx + 1
-                if scan_idx > pole_end_idx + 50 
+                if scan_idx > pole_end_idx + 50
                     break
             
             bool all_reds = true
-            float lowest_flag_low = high 
+            float lowest_flag_low = high
+            float highest_flag_high = 0.0 // To track the top of the flag
             float flag_vol_sum = 0.0
             
             for k = 1 to f_len
                 flag_vol_sum += volume[k]
-                if close[k] >= open[k]
+                bool is_green = close[k] >= open[k]
+                
+                if use_strict_reds and is_green
                     all_reds := false
-                else
-                    if low[k] < lowest_flag_low
-                        lowest_flag_low := low[k]
+                
+                if low[k] < lowest_flag_low
+                    lowest_flag_low := low[k]
+                
+                // Track the highest high of the flag structure
+                if high[k] > highest_flag_high
+                    highest_flag_high := high[k]
             
             if all_reds
                 float pole_height = full_surge_high - full_surge_low
@@ -147,13 +153,14 @@ find_bull_flag_pattern() =>
                 float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                 float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
                 float avg_flag_vol = f_len > 0 ? flag_vol_sum / f_len : 0.0
+                
                 bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
                 
                 if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
-                    ret_entry := high[1]
+                    ret_entry := highest_flag_high // Set entry to the highest point of the flag
                     ret_sl := lowest_flag_low
                     ret_flag_vol := avg_flag_vol
-                    break 
+                    break
 
     [ret_sl, ret_entry, ret_flag_vol]
 
@@ -161,12 +168,23 @@ find_bull_flag_pattern() =>
 // TRADE EXECUTION
 // ====================================
 
-[sl_level, entry_level, flag_avg_vol] = find_bull_flag_pattern()
+[sl_level_raw, entry_level_raw, flag_avg_vol] = find_bull_flag_pattern()
 
-// Calculate total commission cost for the round trip
+// --- Psychological Level Logic ---
+// If the entry is just below a .00 or .50, move it above.
+float entry_level_adj = entry_level_raw
+if use_psych_filter and not na(entry_level_raw)
+    float next_whole = math.ceil(entry_level_raw)
+    float next_half = math.ceil(entry_level_raw * 2.0) / 2.0
+    float nearest_res = math.min(next_whole, next_half)
+    // If we are within 0.5% below a psych level, assume resistance and move entry above it
+    float dist = nearest_res - entry_level_raw
+    if dist > 0 and dist < (entry_level_raw * 0.005)
+        entry_level_adj := nearest_res + syminfo.mintick
+
 float total_commission_cost = commission_per_share * trade_qty
 
-// --- 1. Exit Management (Updated for Label Change) ---
+// --- 1. Exit Management ---
 if in_trade
     if low <= sl_price
         cnt_loss := cnt_loss + 1
@@ -175,8 +193,6 @@ if in_trade
         in_trade := false
         last_exit_bar := bar_index
         status_txt := "Stop Loss Hit"
-        
-        // Update Label to "Lose"
         if not na(active_trade_label)
             label.set_text(active_trade_label, "Lose")
             label.set_color(active_trade_label, color.red)
@@ -190,65 +206,60 @@ if in_trade
         in_trade := false
         last_exit_bar := bar_index
         status_txt := "Take Profit Hit"
-        
-        // Update Label to "Win"
         if not na(active_trade_label)
             label.set_text(active_trade_label, "Win")
             label.set_color(active_trade_label, color.green)
-            // Style remains label_up for win usually, or change as preferred
 
 // --- 2. Entry Logic ---
 
-bool pattern_found = not na(entry_level) 
-bool cond_breakout = close > entry_level 
-bool cond_green    = close > open        
+bool pattern_found = not na(entry_level_adj)
+bool cond_breakout = close > entry_level_adj
+bool cond_green = close > open
 bool cond_no_trade = not in_trade
 bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
 bool cond_breakout_vol = volume > flag_avg_vol
+bool cond_macd = macd_line > 0 and macd_line > signal_line
 
-bool trigger_buy = pattern_found and 
-                   (not use_breakout or cond_breakout) and 
-                   (not use_green_bar or cond_green) and 
-                   (not use_no_trade or cond_no_trade) and 
-                   (not use_cooldown or cond_cooldown) and
-                   (not use_breakout_vol or cond_breakout_vol)
+bool trigger_buy = pattern_found and
+     (not use_breakout or cond_breakout) and
+     (not use_green_bar or cond_green) and
+     (not use_no_trade or cond_no_trade) and
+     (not use_cooldown or cond_cooldown) and
+     (not use_breakout_vol or cond_breakout_vol) and
+     (not use_macd_filter or cond_macd)
 
-// Do not trigger a buy if the current bar is outside the lookback period
 if time < lookback_start_time
     trigger_buy := false
 
 if trigger_buy
     in_trade := true
     status_txt := "PIVOT ENTRY"
-    
-    entry_price := entry_level 
-    sl_price := sl_level
-    
+    entry_price := entry_level_adj
+    sl_price := sl_level_raw
     float risk = entry_price - sl_price
     if risk <= 0
         risk := syminfo.mintick * 10
 
     tp_price := entry_price + (risk * 2)
 
-// ====================================
-// Chart Visuals
-// ====================================
+    // ====================================
+    // Chart Visuals
+    // ====================================
 
-if trigger_buy
     l_entry := line.new(x1=bar_index, y1=entry_price, x2=bar_index, y2=entry_price, color=color.blue, width=2, style=line.style_solid)
     l_tp := line.new(x1=bar_index, y1=tp_price, x2=bar_index, y2=tp_price, color=color.green, width=2)
     l_sl := line.new(x1=bar_index, y1=sl_price, x2=bar_index, y2=sl_price, color=color.red, width=2)
     b_risk := box.new(left=bar_index, top=tp_price, right=bar_index, bottom=sl_price, bgcolor=color.new(color.teal, 85), border_color=color.teal)
 
-    // Store the specific label for this trade in 'active_trade_label'
     active_trade_label := label.new(
-         x=bar_index, 
-         y=low, 
-         text="BUY", 
-         color=color.blue, 
-         textcolor=color.white, 
-         style=label.style_label_up, 
-         yloc=yloc.belowbar
+         x=bar_index,
+         y=low,
+         text="BUY",
+         color=color.blue,
+         textcolor=color.white,
+         style=label.style_label_up,
+         yloc=yloc.belowbar,
+         text_formatting=text.format_bold
          )
 
     array.push(weekly_lines, l_entry)
@@ -274,9 +285,9 @@ if barstate.islast
     string d_entry = na(entry_price) ? "0.00" : str.tostring(entry_price, format.mintick)
     string d_sl = na(sl_price) ? "0.00" : str.tostring(sl_price, format.mintick)
 
-    table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.small)
-    table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.small)
-    table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.small)
+    table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
+    table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
+    table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
 
     string wl_text = str.format("{0} W | {1} L", cnt_win, cnt_loss)
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
