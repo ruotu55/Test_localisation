@@ -78,13 +78,11 @@ if is_reset_bar
     cnt_loss := 0
     net_profit := 0.0
     status_txt := "Waiting"
-    
     if not in_trade
         entry_price := na
         tp_price := na
         sl_price := na
         last_exit_bar := -999
-        
     while array.size(weekly_lines) > 0
         line.delete(array.pop(weekly_lines))
     while array.size(weekly_boxes) > 0
@@ -100,24 +98,35 @@ find_bull_flag_pattern() =>
     float ret_sl = na
     float ret_entry = na
     float ret_flag_vol = 0.0
-    
     for f_len = flag_min_bars to flag_max_bars
         int pole_end_idx = f_len + 1
         bool is_pole = true
         
         // Loop runs based on the Input "Pole Min Green Bars"
+        int high_vol_count = 0
         for p = 0 to pole_min_bars - 1
             int idx = pole_end_idx + p
-            if not (close[idx] > open[idx] and volume[idx] > vol_ma_10[idx])
+            // Strict Rule: Pole candles must be Green
+            if close[idx] <= open[idx]
                 is_pole := false
+                break
+            
+            // Volume Check: Count how many have high volume
+            if volume[idx] > vol_ma_10[idx]
+                high_vol_count += 1
         
+        // Logic: Half of the bars need to have high volume (floor of N/2)
+        if is_pole
+            int vol_threshold = math.floor(pole_min_bars / 2)
+            if high_vol_count < vol_threshold
+                is_pole := false
+
         if is_pole
             float full_surge_high = high[pole_end_idx]
             float full_surge_low = low[pole_end_idx]
             float pole_vol_sum = 0.0
             int pole_bar_count = 0
             int scan_idx = pole_end_idx
-            
             while close[scan_idx] > open[scan_idx]
                 if high[scan_idx] > full_surge_high
                     full_surge_high := high[scan_idx]
@@ -128,29 +137,25 @@ find_bull_flag_pattern() =>
                 scan_idx := scan_idx + 1
                 if scan_idx > pole_end_idx + 50
                     break
-            
             // --- NEW FLAG LOGIC (Allows 1 Small Green Tip) ---
             bool is_valid_flag = true
             float lowest_flag_low = high
             float flag_vol_sum = 0.0
             float potential_entry = na
-            
             // Check if the most recent flag bar (index 1) is Green
             bool has_green_tip = close[1] > open[1]
-            
             if has_green_tip
                 // RULE: If tip is green, it must NOT cross the previous Red's high
                 // and the flag must be at least 2 bars long to have a Red behind it.
                 if f_len < 2 or high[1] >= high[2]
                     is_valid_flag := false
                 else
-                    flag_vol_sum += volume[1]
+                    // Only check volume of the last bar (index 1)
+                    flag_vol_sum := volume[1]
                     lowest_flag_low := math.min(lowest_flag_low, low[1])
                     potential_entry := high[2] // Trigger is above the last RED candle
-                    
                     // The rest (2 to f_len) MUST be Red
                     for k = 2 to f_len
-                        flag_vol_sum += volume[k]
                         if close[k] >= open[k]
                             is_valid_flag := false
                             break
@@ -159,23 +164,22 @@ find_bull_flag_pattern() =>
             else
                 // Standard Case: Bar 1 is Red, so ALL must be Red
                 potential_entry := high[1]
+                // Only check volume of the last bar (index 1)
+                flag_vol_sum := volume[1]
                 for k = 1 to f_len
-                    flag_vol_sum += volume[k]
                     if close[k] >= open[k]
                         is_valid_flag := false
                         break
                     else
                         lowest_flag_low := math.min(lowest_flag_low, low[k])
-            
             if is_valid_flag
                 float pole_height = full_surge_high - full_surge_low
                 float pullback_depth = full_surge_high - lowest_flag_low
                 float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                 float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
-                float avg_flag_vol = f_len > 0 ? flag_vol_sum / f_len : 0.0
-                
+                // UPDATED: Use flag_vol_sum directly as the "Flag Vol" (since it only holds volume[1])
+                float avg_flag_vol = flag_vol_sum
                 bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
-                
                 if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
                     ret_entry := potential_entry
                     ret_sl := lowest_flag_low
@@ -240,12 +244,12 @@ bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
 bool cond_breakout_vol = volume > flag_avg_vol
 bool cond_macd = macd_line > 0 and macd_line > signal_line
 
-bool trigger_buy = pattern_found and
-     (not use_breakout or cond_breakout) and
-     (not use_green_bar or cond_green) and
-     (not use_no_trade or cond_no_trade) and
-     (not use_cooldown or cond_cooldown) and
-     (not use_breakout_vol or cond_breakout_vol) and
+bool trigger_buy = pattern_found and 
+     (not use_breakout or cond_breakout) and 
+     (not use_green_bar or cond_green) and 
+     (not use_no_trade or cond_no_trade) and 
+     (not use_cooldown or cond_cooldown) and 
+     (not use_breakout_vol or cond_breakout_vol) and 
      (not use_macd_filter or cond_macd)
 
 if time < lookback_start_time
@@ -259,7 +263,7 @@ if trigger_buy
     float risk = entry_price - sl_price
     if risk <= 0
         risk := syminfo.mintick * 10
-
+    
     tp_price := entry_price + (risk * 2)
 
     // ====================================
@@ -272,16 +276,16 @@ if trigger_buy
     b_risk := box.new(left=bar_index, top=tp_price, right=bar_index, bottom=sl_price, bgcolor=color.new(color.teal, 85), border_color=color.teal)
 
     active_trade_label := label.new(
-         x=bar_index,
-         y=low,
-         text="BUY",
-         color=color.blue,
-         textcolor=color.white,
-         style=label.style_label_up,
+         x=bar_index, 
+         y=low, 
+         text="BUY", 
+         color=color.blue, 
+         textcolor=color.white, 
+         style=label.style_label_up, 
          yloc=yloc.belowbar,
          text_formatting=text.format_bold
-         )
-
+    )
+    
     array.push(weekly_lines, l_entry)
     array.push(weekly_lines, l_tp)
     array.push(weekly_lines, l_sl)
@@ -313,16 +317,16 @@ if barstate.islast
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
     table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
     table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
-
+    
     color stat_col = in_trade ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
     bool cooling_down = not in_trade and (bar_index - last_exit_bar) <= cooldown
     string display_status = cooling_down ? "Cooldown..." : status_txt
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
-
+    
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
     string profit_txt = str.tostring(net_profit, format.mintick) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
-
+    
     table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
     table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
 
