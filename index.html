@@ -147,8 +147,11 @@ find_bull_flag_pattern() =>
             float lowest_flag_low = high
             float flag_vol_sum = 0.0
             float potential_entry = na
+            float potential_sl = na
+            
             // Check if the most recent flag bar (index 1) is Green
             bool has_green_tip = close[1] > open[1]
+            
             if has_green_tip
                 // RULE: If tip is green, it must NOT cross the previous Red's high
                 // and the flag must be at least 2 bars long to have a Red behind it.
@@ -158,7 +161,10 @@ find_bull_flag_pattern() =>
                     // Only check volume of the last bar (index 1)
                     flag_vol_sum := volume[1]
                     lowest_flag_low := math.min(lowest_flag_low, low[1])
-                    potential_entry := high[2] // Trigger is above the last RED candle
+                    
+                    potential_entry := high[1] // Trigger is above the GREEN tip candle
+                    potential_sl := low[1]     // UPDATED: SL is always the low of the last candle
+                    
                     // The rest (2 to f_len) MUST be Red
                     for k = 2 to f_len
                         if close[k] >= open[k]
@@ -169,6 +175,8 @@ find_bull_flag_pattern() =>
             else
                 // Standard Case: Bar 1 is Red, so ALL must be Red
                 potential_entry := high[1]
+                potential_sl := low[1]         // UPDATED: SL is always the low of the last candle
+                
                 // Only check volume of the last bar (index 1)
                 flag_vol_sum := volume[1]
                 for k = 1 to f_len
@@ -177,6 +185,7 @@ find_bull_flag_pattern() =>
                         break
                     else
                         lowest_flag_low := math.min(lowest_flag_low, low[k])
+            
             if is_valid_flag
                 float pole_height = full_surge_high - full_surge_low
                 float pullback_depth = full_surge_high - lowest_flag_low
@@ -187,7 +196,7 @@ find_bull_flag_pattern() =>
                 bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
                 if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
                     ret_entry := potential_entry
-                    ret_sl := lowest_flag_low
+                    ret_sl := potential_sl // Uses the Low of Bar 1
                     ret_flag_vol := avg_flag_vol
                     break
 
