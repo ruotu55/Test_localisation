@@ -1,88 +1,79 @@
 //@version=6
-indicator("Rom Master - Bull Flag", overlay=true)
+indicator("Rom Master - Multi-Pattern Strategy", overlay=true)
 
 // ====================================
-// CONFIGURATION & GLOBAL VARIABLES
+// 1. GLOBAL CONFIGURATION & GENERICS
 // ====================================
 
-// --- MONEY MANAGEMENT SETTINGS ---
-int trade_qty = input.int(250, "Trade Share Size", group="Money Management")
-float commission_per_share = input.float(0.02, "Commission (Per Share - Round Trip)", group="Money Management", tooltip="Cost per share for a round-trip trade (buy + sell). Example: 0.02 means $50 commission for 2500 shares.")
-int cooldown = 2 // Fixed to 2 bars, removed from inputs
+// --- MONEY MANAGEMENT & PERFORMANCE ---
+int trade_qty = input.int(250, "Trade Share Size", group="═════ MONEY MANAGEMENT ═════")
+float commission_per_share = input.float(0.02, "Commission (Per Share - Round Trip)", group="═════ MONEY MANAGEMENT ═════", tooltip="Cost per share for a round-trip trade (buy + sell). Example: 0.02 means $50 commission for 2500 shares.")
+int lookback_days = input.int(7, "Performance History (Days)", minval=1, group="═════ MONEY MANAGEMENT ═════", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
 
-// --- PERFORMANCE TRACKING SETTING ---
-int lookback_days = input.int(7, "Performance Lookback (Days)", minval=1, group="Configuration", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
+// --- GENERIC ENTRY FILTERS (Apply to ALL Patterns) ---
+bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
+bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
+bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
+bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
+bool use_vwap_filter = input.bool(true, "Price > VWAP?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
+bool use_hod_filter = input.bool(true, "TP <= Day High?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Do not create a buy signal if the calculated Take Profit is above the current High of the Day.")
 
-// --- PATTERN SETTINGS ---
-int flag_min_bars = 1
-int flag_max_bars = 5
-int pole_min_bars = input.int(2, "Pole Min Green Bars", minval=1, group="Pattern Settings", tooltip="Minimum number of consecutive green bars with high volume to form a pole.")
-
-// --- FILTERS (TOGGLES) ---
-// UPDATED: Removed "Wait for Candle Close" input to enforce immediate calculation
-bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
-bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
-bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
-bool use_depth_filter = input.bool(true, "Max Pullback Depth (30%)?", group="Entry Filters", tooltip="ON = The pullback must not exceed 30% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
-bool use_vol_check = input.bool(true, "Flag Volume < Pole Volume?", group="Entry Filters", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
-bool use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="Entry Filters", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
-bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="Entry Filters", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
-bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="Entry Filters", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
-bool use_vwap_filter = input.bool(true, "Price > VWAP?", group="Entry Filters", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
-bool use_hod_filter = input.bool(true, "TP <= Day High?", group="Entry Filters", tooltip="ON = Do not create a buy signal if the calculated Take Profit is above the current High of the Day.")
-
-// SMAs & Indicators
+// --- GLOBAL VARIABLES & INDICATORS ---
+int cooldown = 2
 float vol_ma_10 = ta.sma(volume, 10)
 float vwap_val = ta.vwap(close)
 [macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
-// Get Daily High for TP check
 float daily_high = request.security(syminfo.tickerid, "D", high)
 
-// Session Performance
+// Trade State Variables
 var int cnt_win = 0
 var int cnt_loss = 0
 var float net_profit = 0.0
-
-// Trade Values
 var bool in_trade = false
 var float tp_price = na
 var float entry_price = na
 var float sl_price = na
-
-// COOLDOWN TRACKING
 var int last_exit_bar = -999
-
-// Status Text
 var string status_txt = "Waiting"
+var string trade_pattern = "" 
 
-// Visual Object References
+// Visual Objects
 var line l_entry = na
 var line l_tp = na
 var line l_sl = na
 var box b_risk = na
 var label active_trade_label = na
 
-// Arrays for Weekly/Lookback Reset
+// Reset Arrays
 var line[] weekly_lines = array.new_line()
 var box[] weekly_boxes = array.new_box()
 var label[] weekly_labels = array.new_label()
 
 // ====================================
-// LOOKBACK RESET LOGIC
+// 2. PATTERN 1: BULL FLAG SETTINGS
 // ====================================
+// Specific inputs for the Bull Flag pattern only
+int p1_pole_min_bars = 2
+int p1_flag_min_bars = 1
+int p1_flag_max_bars = 5
+bool p1_use_depth = input.bool(true, "Max Pullback Depth (30%)?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The pullback must not exceed 30% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
+bool p1_use_vol = input.bool(true, "Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
+bool p1_use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
+bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
 
-// Calculate the timestamp for the start of the lookback period
-int lookback_ms = lookback_days * 86400000 // Days to milliseconds
+// ====================================
+// 3. LOGIC: RESET MECHANISM
+// ====================================
+int lookback_ms = lookback_days * 86400000
 int lookback_start_time = timenow - lookback_ms
-
 bool is_reset_bar = time[1] < lookback_start_time and time >= lookback_start_time
 
 if is_reset_bar
-    // Reset counters
     cnt_win := 0
     cnt_loss := 0
     net_profit := 0.0
     status_txt := "Waiting"
+    trade_pattern := ""
     if not in_trade
         entry_price := na
         tp_price := na
@@ -96,33 +87,32 @@ if is_reset_bar
         label.delete(array.pop(weekly_labels))
 
 // ====================================
-// CORE: BULL FLAG PATTERN DETECTION
+// 4. PATTERN RECOGNITION FUNCTIONS
 // ====================================
 
-find_bull_flag_pattern() =>
+// --- Function: Bull Flag Detection ---
+find_bull_flag() =>
     float ret_sl = na
     float ret_entry = na
     float ret_flag_vol = 0.0
-    for f_len = flag_min_bars to flag_max_bars
+    bool ret_found = false
+
+    for f_len = p1_flag_min_bars to p1_flag_max_bars
         int pole_end_idx = f_len + 1
         bool is_pole = true
         
-        // Loop runs based on the Input "Pole Min Green Bars"
+        // Pole High Volume Check
         int high_vol_count = 0
-        for p = 0 to pole_min_bars - 1
+        for p = 0 to p1_pole_min_bars - 1
             int idx = pole_end_idx + p
-            // Strict Rule: Pole candles must be Green
             if close[idx] <= open[idx]
                 is_pole := false
                 break
-            
-            // Volume Check: Count how many have high volume
             if volume[idx] > vol_ma_10[idx]
                 high_vol_count += 1
         
-        // Logic: Half of the bars need to have high volume (floor of N/2)
         if is_pole
-            int vol_threshold = math.floor(pole_min_bars / 2)
+            int vol_threshold = math.floor(p1_pole_min_bars / 2)
             if high_vol_count < vol_threshold
                 is_pole := false
 
@@ -132,6 +122,8 @@ find_bull_flag_pattern() =>
             float pole_vol_sum = 0.0
             int pole_bar_count = 0
             int scan_idx = pole_end_idx
+            
+            // Find extent of the pole
             while close[scan_idx] > open[scan_idx]
                 if high[scan_idx] > full_surge_high
                     full_surge_high := high[scan_idx]
@@ -142,30 +134,24 @@ find_bull_flag_pattern() =>
                 scan_idx := scan_idx + 1
                 if scan_idx > pole_end_idx + 50
                     break
-            // --- NEW FLAG LOGIC (Allows 1 Small Green Tip) ---
+            
+            // Flag Logic
             bool is_valid_flag = true
             float lowest_flag_low = high
             float flag_vol_sum = 0.0
             float potential_entry = na
             float potential_sl = na
             
-            // Check if the most recent flag bar (index 1) is Green
             bool has_green_tip = close[1] > open[1]
             
             if has_green_tip
-                // RULE: If tip is green, it must NOT cross the previous Red's high
-                // and the flag must be at least 2 bars long to have a Red behind it.
                 if f_len < 2 or high[1] >= high[2]
                     is_valid_flag := false
                 else
-                    // Only check volume of the last bar (index 1)
                     flag_vol_sum := volume[1]
                     lowest_flag_low := math.min(lowest_flag_low, low[1])
-                    
-                    potential_entry := high[1] // Trigger is above the GREEN tip candle
-                    potential_sl := low[1]     // UPDATED: SL is always the low of the last candle
-                    
-                    // The rest (2 to f_len) MUST be Red
+                    potential_entry := high[1]
+                    potential_sl := low[1]
                     for k = 2 to f_len
                         if close[k] >= open[k]
                             is_valid_flag := false
@@ -173,11 +159,8 @@ find_bull_flag_pattern() =>
                         else
                             lowest_flag_low := math.min(lowest_flag_low, low[k])
             else
-                // Standard Case: Bar 1 is Red, so ALL must be Red
                 potential_entry := high[1]
-                potential_sl := low[1]         // UPDATED: SL is always the low of the last candle
-                
-                // Only check volume of the last bar (index 1)
+                potential_sl := low[1]
                 flag_vol_sum := volume[1]
                 for k = 1 to f_len
                     if close[k] >= open[k]
@@ -191,38 +174,72 @@ find_bull_flag_pattern() =>
                 float pullback_depth = full_surge_high - lowest_flag_low
                 float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                 float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
-                // UPDATED: Use flag_vol_sum directly as the "Flag Vol" (since it only holds volume[1])
-                float avg_flag_vol = flag_vol_sum
-                bool vol_rule_passed = not use_vol_check or (avg_flag_vol < avg_pole_vol)
-                if (not use_depth_filter or (depth_ratio <= 0.30)) and vol_rule_passed
+                float avg_flag_vol = flag_vol_sum // Current logic uses last bar vol as avg
+                
+                // Specific Flag Filters
+                bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol)
+                bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.30)
+
+                if depth_rule_passed and vol_rule_passed
                     ret_entry := potential_entry
-                    ret_sl := potential_sl // Uses the Low of Bar 1
+                    ret_sl := potential_sl
                     ret_flag_vol := avg_flag_vol
-                    break
+                    ret_found := true
+                    break // Found valid flag, stop searching
 
-    [ret_sl, ret_entry, ret_flag_vol]
+    [ret_found, ret_entry, ret_sl, ret_flag_vol]
 
 // ====================================
-// TRADE EXECUTION
+// 5. SIGNAL AGGREGATION (THE BRAIN)
 // ====================================
 
-[sl_level_raw, entry_level_raw, flag_avg_vol] = find_bull_flag_pattern()
+// A. Check Pattern 1 (Bull Flag)
+[p1_found, p1_entry, p1_sl, p1_ref_vol] = find_bull_flag()
 
-// --- Psychological Level Logic ---
-// If the entry is just below a .00 or .50, move it above.
-float entry_level_adj = entry_level_raw
-if use_psych_filter and not na(entry_level_raw)
-    float next_whole = math.ceil(entry_level_raw)
-    float next_half = math.ceil(entry_level_raw * 2.0) / 2.0
+// B. Check Pattern 2 (Example / Placeholder)
+bool p2_found = false
+float p2_entry = na
+float p2_sl = na
+float p2_ref_vol = 0.0
+
+// C. Determine Final Signal
+// We prioritize patterns. If P1 found, use P1. If not, check P2.
+bool pattern_detected = false
+float raw_entry = na
+float raw_sl = na
+float raw_ref_vol = na
+string pattern_name = ""
+
+if p1_found
+    pattern_detected := true
+    raw_entry := p1_entry
+    raw_sl := p1_sl
+    raw_ref_vol := p1_ref_vol
+    pattern_name := "Bull Flag"
+else if p2_found
+    pattern_detected := true
+    raw_entry := p2_entry
+    raw_sl := p2_sl
+    raw_ref_vol := p2_ref_vol
+    pattern_name := "Pattern 2"
+
+// ====================================
+// 6. GENERIC TRADE EXECUTION
+// ====================================
+
+// --- Adjust Entry for Psych Levels ---
+float final_entry = raw_entry
+if use_psych_filter and not na(raw_entry)
+    float next_whole = math.ceil(raw_entry)
+    float next_half = math.ceil(raw_entry * 2.0) / 2.0
     float nearest_res = math.min(next_whole, next_half)
-    // If we are within 0.5% below a psych level, assume resistance and move entry above it
-    float dist = nearest_res - entry_level_raw
-    if dist > 0 and dist < (entry_level_raw * 0.005)
-        entry_level_adj := nearest_res + syminfo.mintick
+    float dist = nearest_res - raw_entry
+    if dist > 0 and dist < (raw_entry * 0.005)
+        final_entry := nearest_res + syminfo.mintick
 
 float total_commission_cost = commission_per_share * trade_qty
 
-// --- 1. Exit Management ---
+// --- Exit Management ---
 if in_trade
     if low <= sl_price
         cnt_loss := cnt_loss + 1
@@ -232,7 +249,7 @@ if in_trade
         last_exit_bar := bar_index
         status_txt := "Stop Loss Hit"
         if not na(active_trade_label)
-            label.set_text(active_trade_label, "Lose")
+            label.set_text(active_trade_label, "Lose\n" + trade_pattern)
             label.set_color(active_trade_label, color.red)
             label.set_style(active_trade_label, label.style_label_down)
             label.set_yloc(active_trade_label, yloc.abovebar)
@@ -245,72 +262,69 @@ if in_trade
         last_exit_bar := bar_index
         status_txt := "Take Profit Hit"
         if not na(active_trade_label)
-            label.set_text(active_trade_label, "Win")
+            label.set_text(active_trade_label, "Win\n" + trade_pattern)
             label.set_color(active_trade_label, color.green)
 
-// --- 2. Entry Logic ---
+// --- Entry Logic (Generic Filters applied to Final Signal) ---
 
-bool pattern_found = not na(entry_level_adj)
+// 1. Breakout Condition
+bool cond_breakout = high >= final_entry
 
-// UPDATED LOGIC:
-// "Wait for Candle Close" removed. Logic now strictly triggers on Price >= Entry.
-bool cond_breakout = high >= entry_level_adj
-
-bool cond_green = close > open
-bool cond_no_trade = not in_trade
-bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
-
-// Volume Projection for Real-time Bars
+// 2. Volume Projection
 float volume_check = volume
 if barstate.isrealtime
     int time_elapsed = timenow - time
     int time_total = time_close - time
-    // Project volume if we have elapsed time to avoid division by zero
     if time_elapsed > 0 and time_total > 0
         volume_check := volume * (time_total / time_elapsed)
 
-bool cond_breakout_vol = volume_check > flag_avg_vol
+// 3. Generic Filter Checks
+bool cond_green = close > open
+bool cond_no_trade = not in_trade
+bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
 bool cond_macd = macd_line > 0 and macd_line > signal_line
 bool cond_vwap = close > vwap_val
 
-// --- Check TP vs High of Day ---
-// We calculate the potential TP before the trigger to check this condition
-float calc_risk = entry_level_adj - sl_level_raw
+// 4. Pattern Specific Volume Check (Only applies if P1 triggered)
+bool cond_p1_vol = true 
+if p1_found and p1_use_breakout_vol
+    cond_p1_vol := volume_check > raw_ref_vol
+
+// 5. TP Validity Check (HOD)
+float calc_risk = final_entry - raw_sl
 if calc_risk <= 0
     calc_risk := syminfo.mintick * 10
-float projected_tp = entry_level_adj + (calc_risk * 2)
-
+float projected_tp = final_entry + (calc_risk * 2)
 bool cond_tp_valid = projected_tp <= daily_high
 
-// UPDATED TRIGGER: Removed 'not use_breakout or' as breakout check is now unified
-bool trigger_buy = pattern_found and 
+// --- MASTER BUY TRIGGER ---
+bool trigger_buy = pattern_detected and 
      cond_breakout and 
      (not use_green_bar or cond_green) and 
      (not use_no_trade or cond_no_trade) and 
      (not use_cooldown or cond_cooldown) and 
-     (not use_breakout_vol or cond_breakout_vol) and 
      (not use_macd_filter or cond_macd) and
      (not use_vwap_filter or cond_vwap) and
-     (not use_hod_filter or cond_tp_valid) // Added HOD check
+     (not use_hod_filter or cond_tp_valid) and
+     cond_p1_vol // Applies pattern-specific volume rule
 
 if time < lookback_start_time
     trigger_buy := false
 
 if trigger_buy
     in_trade := true
-    status_txt := "PIVOT ENTRY"
-    entry_price := entry_level_adj
-    sl_price := sl_level_raw
+    status_txt := pattern_name + " ENTRY"
+    trade_pattern := pattern_name // Save the pattern name for this trade
+    entry_price := final_entry
+    sl_price := raw_sl
+    
+    // Recalculate Risk/TP based on confirmed entry
     float risk = entry_price - sl_price
     if risk <= 0
         risk := syminfo.mintick * 10
-    
     tp_price := entry_price + (risk * 2)
 
-    // ====================================
-    // Chart Visuals
-    // ====================================
-
+    // Visuals
     l_entry := line.new(x1=bar_index, y1=entry_price, x2=bar_index, y2=entry_price, color=color.blue, width=2, style=line.style_solid)
     l_tp := line.new(x1=bar_index, y1=tp_price, x2=bar_index, y2=tp_price, color=color.green, width=2)
     l_sl := line.new(x1=bar_index, y1=sl_price, x2=bar_index, y2=sl_price, color=color.red, width=2)
@@ -319,7 +333,7 @@ if trigger_buy
     active_trade_label := label.new(
          x=bar_index, 
          y=low, 
-         text="BUY", 
+         text="BUY\n" + pattern_name, 
          color=color.blue, 
          textcolor=color.white, 
          style=label.style_label_up, 
@@ -340,7 +354,7 @@ if in_trade or (bar_index == last_exit_bar)
     box.set_right(b_risk, bar_index)
 
 // ====================================
-// Table Summary
+// 7. DASHBOARD (SAME VISUALS)
 // ====================================
 
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
@@ -350,9 +364,10 @@ if barstate.islast
     string d_entry = na(entry_price) ? "0.00" : str.tostring(entry_price, format.mintick)
     string d_sl = na(sl_price) ? "0.00" : str.tostring(sl_price, format.mintick)
 
-    table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
-    table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
-    table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.small, text_formatting=text.format_bold)
+    // INCREASED TEXT SIZE HERE FOR HEADERS
+    table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
+    table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
+    table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
 
     string wl_text = str.format("{0} W | {1} L", cnt_win, cnt_loss)
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
