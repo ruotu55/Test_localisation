@@ -19,8 +19,7 @@ int flag_max_bars = 5
 int pole_min_bars = input.int(2, "Pole Min Green Bars", minval=1, group="Pattern Settings", tooltip="Minimum number of consecutive green bars with high volume to form a pole.")
 
 // --- FILTERS (TOGGLES) ---
-// UPDATED: Defaults to FALSE for Immediate Entry
-bool use_breakout = input.bool(false, "Wait for Candle Close?", group="Entry Filters", tooltip="ON = Wait for the candle to close above the entry line.\nOFF = Enter immediately when price touches the entry line (High >= Entry).")
+// UPDATED: Removed "Wait for Candle Close" input to enforce immediate calculation
 bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="Entry Filters", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
 bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="Entry Filters", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
 bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="Entry Filters", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
@@ -242,9 +241,8 @@ if in_trade
 bool pattern_found = not na(entry_level_adj)
 
 // UPDATED LOGIC:
-// If "Wait for Candle Close" (use_breakout) is TRUE, we check CLOSE > ENTRY.
-// If "Wait for Candle Close" is FALSE (Immediate), we check HIGH >= ENTRY (Intra-bar cross).
-bool cond_breakout = use_breakout ? (close > entry_level_adj) : (high >= entry_level_adj)
+// "Wait for Candle Close" removed. Logic now strictly triggers on Price >= Entry.
+bool cond_breakout = high >= entry_level_adj
 
 bool cond_green = close > open
 bool cond_no_trade = not in_trade
@@ -263,7 +261,7 @@ bool cond_breakout_vol = volume_check > flag_avg_vol
 bool cond_macd = macd_line > 0 and macd_line > signal_line
 bool cond_vwap = close > vwap_val
 
-// UPDATED TRIGGER: Removed 'not use_breakout or' to ensure price check is always enforced.
+// UPDATED TRIGGER: Removed 'not use_breakout or' as breakout check is now unified
 bool trigger_buy = pattern_found and 
      cond_breakout and 
      (not use_green_bar or cond_green) and 
