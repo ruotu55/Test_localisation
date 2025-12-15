@@ -29,11 +29,14 @@ bool use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="Entr
 bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="Entry Filters", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="Entry Filters", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 bool use_vwap_filter = input.bool(true, "Price > VWAP?", group="Entry Filters", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
+bool use_hod_filter = input.bool(true, "TP <= Day High?", group="Entry Filters", tooltip="ON = Do not create a buy signal if the calculated Take Profit is above the current High of the Day.")
 
 // SMAs & Indicators
 float vol_ma_10 = ta.sma(volume, 10)
 float vwap_val = ta.vwap(close)
 [macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
+// Get Daily High for TP check
+float daily_high = request.security(syminfo.tickerid, "D", high)
 
 // Session Performance
 var int cnt_win = 0
@@ -261,6 +264,15 @@ bool cond_breakout_vol = volume_check > flag_avg_vol
 bool cond_macd = macd_line > 0 and macd_line > signal_line
 bool cond_vwap = close > vwap_val
 
+// --- Check TP vs High of Day ---
+// We calculate the potential TP before the trigger to check this condition
+float calc_risk = entry_level_adj - sl_level_raw
+if calc_risk <= 0
+    calc_risk := syminfo.mintick * 10
+float projected_tp = entry_level_adj + (calc_risk * 2)
+
+bool cond_tp_valid = projected_tp <= daily_high
+
 // UPDATED TRIGGER: Removed 'not use_breakout or' as breakout check is now unified
 bool trigger_buy = pattern_found and 
      cond_breakout and 
@@ -269,7 +281,8 @@ bool trigger_buy = pattern_found and
      (not use_cooldown or cond_cooldown) and 
      (not use_breakout_vol or cond_breakout_vol) and 
      (not use_macd_filter or cond_macd) and
-     (not use_vwap_filter or cond_vwap)
+     (not use_vwap_filter or cond_vwap) and
+     (not use_hod_filter or cond_tp_valid) // Added HOD check
 
 if time < lookback_start_time
     trigger_buy := false
