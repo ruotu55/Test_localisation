@@ -11,7 +11,7 @@ float commission_per_share = input.float(0.02, "Commission (Per Share - Round Tr
 int lookback_days = input.int(7, "Performance History (Days)", minval=1, group="═════ MONEY MANAGEMENT ═════", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
 
 // --- GENERIC ENTRY FILTERS (Apply to ALL Patterns) ---
-bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Do not enter a new trade if you are currently in one.\nOFF = Allow multiple overlapping trades.")
+bool use_no_trade = input.bool(true, "Block Entry if Trade Active?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Strictly 1 trade at a time.\nOFF = Allows up to 2 trades at the same time.")
 bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
 bool use_psych_filter = input.bool(true, "Clear Psych Levels ($X.00/.50)?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 bool use_macd_filter = input.bool(true, "MACD > 0 & > Signal?", group="═════ GLOBAL ENTRY FILTERS ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
@@ -25,26 +25,27 @@ float vwap_val = ta.vwap(close)
 [macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
 float daily_high = request.security(syminfo.tickerid, "D", high)
 
+// --- CUSTOM TYPE FOR MULTI-TRADE SUPPORT ---
+type Trade
+    float entry
+    float sl
+    float tp
+    string pat
+    line l_e
+    line l_tp
+    line l_sl
+    box b_risk
+    label lbl
+
 // Trade State Variables
+var Trade[] active_trades = array.new<Trade>() // Array to hold multiple trades
 var int cnt_win = 0
 var int cnt_loss = 0
 var float net_profit = 0.0
-var bool in_trade = false
-var float tp_price = na
-var float entry_price = na
-var float sl_price = na
 var int last_exit_bar = -999
 var string status_txt = "Waiting"
-var string trade_pattern = "" 
 
-// Visual Objects
-var line l_entry = na
-var line l_tp = na
-var line l_sl = na
-var box b_risk = na
-var label active_trade_label = na
-
-// Reset Arrays
+// Visual Arrays for Clean Up
 var line[] weekly_lines = array.new_line()
 var box[] weekly_boxes = array.new_box()
 var label[] weekly_labels = array.new_label()
@@ -63,7 +64,6 @@ bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="═�
 
 // --- NEW WICK FILTERS ---
 bool p1_avoid_wick = input.bool(true, "Avoid Pole Top Wick?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Cancel pattern if the last candle of the surge (the top) has a long upper wick.")
-// CHANGE: Default set to 0.33 (33%) per request
 float p1_wick_ratio = input.float(0.33, "Pole Top Wick/Body Ratio", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="If 'Avoid Pole Top Wick' is ON: The pattern is invalid if Upper Wick > (Body * Ratio). Example: 0.33 means wick larger than 1/3rd of body is rejected.")
 
 // ====================================
@@ -78,12 +78,10 @@ if is_reset_bar
     cnt_loss := 0
     net_profit := 0.0
     status_txt := "Waiting"
-    trade_pattern := ""
-    if not in_trade
-        entry_price := na
-        tp_price := na
-        sl_price := na
-        last_exit_bar := -999
+    last_exit_bar := -999
+    // Clear active trades on reset
+    active_trades.clear()
+    
     while array.size(weekly_lines) > 0
         line.delete(array.pop(weekly_lines))
     while array.size(weekly_boxes) > 0
@@ -95,7 +93,6 @@ if is_reset_bar
 // 4. PATTERN RECOGNITION FUNCTIONS
 // ====================================
 
-// --- Function: Bull Flag Detection ---
 find_bull_flag() =>
     float ret_sl = na
     float ret_entry = na
@@ -106,7 +103,6 @@ find_bull_flag() =>
         int pole_end_idx = f_len + 1
         bool is_pole = true
         
-        // Pole High Volume Check
         int high_vol_count = 0
         for p = 0 to p1_pole_min_bars - 1
             int idx = pole_end_idx + p
@@ -121,18 +117,12 @@ find_bull_flag() =>
             if high_vol_count < vol_threshold
                 is_pole := false
 
-        // --- NEW WICK FILTER LOGIC ---
-        // If the top of the pole (pole_end_idx) has a long upper wick, reject the pattern
         if is_pole and p1_avoid_wick
             float top_high = high[pole_end_idx]
             float top_open = open[pole_end_idx]
             float top_close = close[pole_end_idx]
-            
             float u_wick = top_high - math.max(top_open, top_close)
             float body = math.abs(top_close - top_open)
-            
-            // Rejection Condition: Wick > Body * Ratio
-            // We use >= on ratio to catch cases where body is 0 (doji)
             if u_wick > (body * p1_wick_ratio)
                 is_pole := false
 
@@ -143,7 +133,6 @@ find_bull_flag() =>
             int pole_bar_count = 0
             int scan_idx = pole_end_idx
             
-            // Find extent of the pole
             while close[scan_idx] > open[scan_idx]
                 if high[scan_idx] > full_surge_high
                     full_surge_high := high[scan_idx]
@@ -155,7 +144,6 @@ find_bull_flag() =>
                 if scan_idx > pole_end_idx + 50
                     break
             
-            // Flag Logic
             bool is_valid_flag = true
             float lowest_flag_low = high
             float flag_vol_sum = 0.0
@@ -194,9 +182,8 @@ find_bull_flag() =>
                 float pullback_depth = full_surge_high - lowest_flag_low
                 float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                 float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
-                float avg_flag_vol = flag_vol_sum // Current logic uses last bar vol as avg
+                float avg_flag_vol = flag_vol_sum 
                 
-                // Specific Flag Filters
                 bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol)
                 bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
 
@@ -205,25 +192,21 @@ find_bull_flag() =>
                     ret_sl := potential_sl
                     ret_flag_vol := avg_flag_vol
                     ret_found := true
-                    break // Found valid flag, stop searching
+                    break 
 
     [ret_found, ret_entry, ret_sl, ret_flag_vol]
 
 // ====================================
-// 5. SIGNAL AGGREGATION (THE BRAIN)
+// 5. SIGNAL AGGREGATION
 // ====================================
 
-// A. Check Pattern 1 (Bull Flag)
 [p1_found, p1_entry, p1_sl, p1_ref_vol] = find_bull_flag()
 
-// B. Check Pattern 2 (Example / Placeholder)
 bool p2_found = false
 float p2_entry = na
 float p2_sl = na
 float p2_ref_vol = 0.0
 
-// C. Determine Final Signal
-// We prioritize patterns. If P1 found, use P1. If not, check P2.
 bool pattern_detected = false
 float raw_entry = na
 float raw_sl = na
@@ -244,10 +227,9 @@ else if p2_found
     pattern_name := "Pattern 2"
 
 // ====================================
-// 6. GENERIC TRADE EXECUTION
+// 6. GENERIC TRADE EXECUTION (MULTI-TRADE)
 // ====================================
 
-// --- Adjust Entry for Psych Levels ---
 float final_entry = raw_entry
 if use_psych_filter and not na(raw_entry)
     float next_whole = math.ceil(raw_entry)
@@ -259,38 +241,51 @@ if use_psych_filter and not na(raw_entry)
 
 float total_commission_cost = commission_per_share * trade_qty
 
-// --- Exit Management ---
-if in_trade
-    if low <= sl_price
-        cnt_loss := cnt_loss + 1
-        float gross_loss = (entry_price - sl_price) * trade_qty
-        net_profit := net_profit - (gross_loss + total_commission_cost)
-        in_trade := false
-        last_exit_bar := bar_index
-        status_txt := "Stop Loss Hit"
-        if not na(active_trade_label)
-            label.set_text(active_trade_label, "Lose\n" + trade_pattern)
-            label.set_color(active_trade_label, color.red)
-            label.set_style(active_trade_label, label.style_label_down)
-            label.set_yloc(active_trade_label, yloc.abovebar)
+// --- MANAGE ACTIVE TRADES (EXIT LOGIC) ---
+// Loop backwards to safely remove closed trades from the array
+if active_trades.size() > 0
+    for i = active_trades.size() - 1 to 0
+        Trade t = active_trades.get(i)
+        bool closed = false
+        
+        // Update Visuals (Drag lines forward)
+        t.l_e.set_x2(bar_index)
+        t.l_tp.set_x2(bar_index)
+        t.l_sl.set_x2(bar_index)
+        t.b_risk.set_right(bar_index)
 
-    else if high >= tp_price
-        cnt_win := cnt_win + 1
-        float gross_profit = (tp_price - entry_price) * trade_qty
-        net_profit := net_profit + (gross_profit - total_commission_cost)
-        in_trade := false
-        last_exit_bar := bar_index
-        status_txt := "Take Profit Hit"
-        if not na(active_trade_label)
-            label.set_text(active_trade_label, "Win\n" + trade_pattern)
-            label.set_color(active_trade_label, color.green)
+        // Check SL
+        if low <= t.sl
+            cnt_loss := cnt_loss + 1
+            float gross_loss = (t.entry - t.sl) * trade_qty
+            net_profit := net_profit - (gross_loss + total_commission_cost)
+            last_exit_bar := bar_index
+            status_txt := "Stop Loss Hit"
+            
+            t.lbl.set_text("Lose\n" + t.pat)
+            t.lbl.set_color(color.red)
+            t.lbl.set_style(label.style_label_down)
+            t.lbl.set_yloc(yloc.abovebar)
+            closed := true
 
-// --- Entry Logic (Generic Filters applied to Final Signal) ---
+        // Check TP
+        else if high >= t.tp
+            cnt_win := cnt_win + 1
+            float gross_profit = (t.tp - t.entry) * trade_qty
+            net_profit := net_profit + (gross_profit - total_commission_cost)
+            last_exit_bar := bar_index
+            status_txt := "Take Profit Hit"
+            
+            t.lbl.set_text("Win\n" + t.pat)
+            t.lbl.set_color(color.green)
+            closed := true
+            
+        if closed
+            active_trades.remove(i)
 
-// 1. Breakout Condition
+// --- ENTRY FILTERS ---
 bool cond_breakout = high >= final_entry
 
-// 2. Volume Projection
 float volume_check = volume
 if barstate.isrealtime
     int time_elapsed = timenow - time
@@ -298,44 +293,45 @@ if barstate.isrealtime
     if time_elapsed > 0 and time_total > 0
         volume_check := volume * (time_total / time_elapsed)
 
-// 3. Generic Filter Checks
 bool cond_green = close > open
-bool cond_no_trade = not in_trade
 bool cond_cooldown = (bar_index - last_exit_bar) > cooldown
 bool cond_macd = macd_line > 0 and macd_line > signal_line
 bool cond_vwap = close > vwap_val
 
-// 4. Pattern Specific Volume Check (Only applies if P1 triggered)
 bool cond_p1_vol = true 
 if p1_found and p1_use_breakout_vol
     cond_p1_vol := volume_check > raw_ref_vol
 
-// 5. TP Validity Check (HOD)
 float calc_risk = final_entry - raw_sl
 if calc_risk <= 0
     calc_risk := syminfo.mintick * 10
 float projected_tp = final_entry + (calc_risk * 2)
 bool cond_tp_valid = projected_tp <= daily_high
 
+// --- TRADE SLOT MANAGEMENT ---
+// If use_no_trade is ON (true), Max 1 trade.
+// If use_no_trade is OFF (false), Max 2 trades.
+int max_concurrent_trades = use_no_trade ? 1 : 2
+bool slots_available = active_trades.size() < max_concurrent_trades
+
 // --- MASTER BUY TRIGGER ---
 bool trigger_buy = pattern_detected and 
      cond_breakout and 
+     slots_available and // Check if we have space for a new trade
      (not use_green_bar or cond_green) and 
-     (not use_no_trade or cond_no_trade) and 
      (not use_cooldown or cond_cooldown) and 
      (not use_macd_filter or cond_macd) and
      (not use_vwap_filter or cond_vwap) and
      (not use_hod_filter or cond_tp_valid) and
-     cond_p1_vol // Applies pattern-specific volume rule
+     cond_p1_vol
 
 if time < lookback_start_time
     trigger_buy := false
 
-// --- MASTER GR (GET READY) TRIGGER ---
-// Triggers if pattern is found and valid, but breakout hasn't happened yet.
+// --- MASTER GR TRIGGER ---
 bool trigger_gr = pattern_detected and
-     not cond_breakout and // Strictly NOT broken out yet
-     (not use_no_trade or cond_no_trade) and 
+     not cond_breakout and 
+     slots_available and 
      (not use_cooldown or cond_cooldown) and 
      (not use_macd_filter or cond_macd) and
      (not use_vwap_filter or cond_vwap) and
@@ -345,74 +341,52 @@ bool trigger_gr = pattern_detected and
 if time < lookback_start_time
     trigger_gr := false
 
-// Draw GR Label
 if trigger_gr
-    label gr_lbl = label.new(
-         x=bar_index, 
-         y=low, 
-         text="GR", 
-         color=color.orange, 
-         textcolor=color.white, 
-         style=label.style_label_up, 
-         yloc=yloc.belowbar,
-         text_formatting=text.format_bold
-    )
+    label gr_lbl = label.new(bar_index, low, "GR", color=color.orange, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
     array.push(weekly_labels, gr_lbl)
 
 if trigger_buy
-    in_trade := true
-    status_txt := pattern_name + " ENTRY"
-    trade_pattern := pattern_name // Save the pattern name for this trade
-    entry_price := final_entry
-    sl_price := raw_sl
-    
-    // Recalculate Risk/TP based on confirmed entry
-    float risk = entry_price - sl_price
+    float entry_p = final_entry
+    float sl_p = raw_sl
+    float risk = entry_p - sl_p
     if risk <= 0
         risk := syminfo.mintick * 10
-    tp_price := entry_price + (risk * 2)
-
-    // Visuals
-    l_entry := line.new(x1=bar_index, y1=entry_price, x2=bar_index, y2=entry_price, color=color.blue, width=2, style=line.style_solid)
-    l_tp := line.new(x1=bar_index, y1=tp_price, x2=bar_index, y2=tp_price, color=color.green, width=2)
-    l_sl := line.new(x1=bar_index, y1=sl_price, x2=bar_index, y2=sl_price, color=color.red, width=2)
-    b_risk := box.new(left=bar_index, top=tp_price, right=bar_index, bottom=sl_price, bgcolor=color.new(color.teal, 85), border_color=color.teal)
-
-    active_trade_label := label.new(
-         x=bar_index, 
-         y=low, 
-         text="BUY\n" + pattern_name, 
-         color=color.blue, 
-         textcolor=color.white, 
-         style=label.style_label_up, 
-         yloc=yloc.belowbar,
-         text_formatting=text.format_bold
-    )
+    float tp_p = entry_p + (risk * 2)
     
-    array.push(weekly_lines, l_entry)
-    array.push(weekly_lines, l_tp)
-    array.push(weekly_lines, l_sl)
-    array.push(weekly_boxes, b_risk)
-    array.push(weekly_labels, active_trade_label)
+    // Create Visuals
+    line l_e_new = line.new(bar_index, entry_p, bar_index, entry_p, color=color.blue, width=2)
+    line l_tp_new = line.new(bar_index, tp_p, bar_index, tp_p, color=color.green, width=2)
+    line l_sl_new = line.new(bar_index, sl_p, bar_index, sl_p, color=color.red, width=2)
+    box b_r_new = box.new(bar_index, tp_p, bar_index, sl_p, bgcolor=color.new(color.teal, 85), border_color=color.teal)
+    label lbl_new = label.new(bar_index, low, "BUY\n" + pattern_name, color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
 
-if in_trade or (bar_index == last_exit_bar)
-    line.set_x2(l_entry, bar_index)
-    line.set_x2(l_tp, bar_index)
-    line.set_x2(l_sl, bar_index)
-    box.set_right(b_risk, bar_index)
+    // Store in clean-up arrays
+    array.push(weekly_lines, l_e_new)
+    array.push(weekly_lines, l_tp_new)
+    array.push(weekly_lines, l_sl_new)
+    array.push(weekly_boxes, b_r_new)
+    array.push(weekly_labels, lbl_new)
+
+    // Create Trade Object and Add to Active List
+    Trade new_trade = Trade.new(entry_p, sl_p, tp_p, pattern_name, l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new)
+    active_trades.push(new_trade)
+    
+    status_txt := pattern_name + " ENTRY"
 
 // ====================================
-// 7. DASHBOARD (SAME VISUALS)
+// 7. DASHBOARD
 // ====================================
 
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
 
 if barstate.islast
-    string d_tp = na(tp_price) ? "0.00" : str.tostring(tp_price, format.mintick)
-    string d_entry = na(entry_price) ? "0.00" : str.tostring(entry_price, format.mintick)
-    string d_sl = na(sl_price) ? "0.00" : str.tostring(sl_price, format.mintick)
-
-    // INCREASED TEXT SIZE HERE FOR HEADERS
+    // Get stats from the MOST RECENT trade if exists, otherwise 0
+    Trade last_t = active_trades.size() > 0 ? active_trades.get(active_trades.size() - 1) : na
+    
+    string d_tp = na(last_t) ? "0.00" : str.tostring(last_t.tp, format.mintick)
+    string d_entry = na(last_t) ? "0.00" : str.tostring(last_t.entry, format.mintick)
+    string d_sl = na(last_t) ? "0.00" : str.tostring(last_t.sl, format.mintick)
+    
     table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
@@ -422,9 +396,11 @@ if barstate.islast
     table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
     table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
     
-    color stat_col = in_trade ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
-    bool cooling_down = not in_trade and (bar_index - last_exit_bar) <= cooldown
-    string display_status = cooling_down ? "Cooldown..." : status_txt
+    int active_cnt = active_trades.size()
+    bool cooling_down = active_cnt == 0 and (bar_index - last_exit_bar) <= cooldown
+    string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : status_txt)
+    color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
+    
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
     
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
@@ -445,17 +421,10 @@ if barstate.islast
 // 8. ALERT CONFIGURATION
 // ====================================
 
-// --- OPTION A: ONE ALERT FOR BOTH (Same Sound) ---
-// Instructions: In TradingView Alert menu, select Condition: "Rom Master..." -> "Any alert() function call".
 if trigger_buy
     alert("BUY SIGNAL | " + syminfo.ticker + " | Entry: " + str.tostring(final_entry) + " | SL: " + str.tostring(raw_sl), alert.freq_once_per_bar_close)
 else if trigger_gr
     alert("GET READY | " + syminfo.ticker + " | Pattern Detected. Watch for breakout.", alert.freq_once_per_bar_close)
-
-// --- OPTION B: SEPARATE ALERTS (Different Sounds) ---
-// Instructions: Create TWO separate alerts in the menu.
-// Alert 1: Select Condition "Alert: BUY Signal". Set sound to 'Bell'.
-// Alert 2: Select Condition "Alert: GET READY". Set sound to 'Chime'.
 
 alertcondition(trigger_buy, title="Alert: BUY Signal", message="BUY {{ticker}} | Price: {{close}} | Check Chart")
 alertcondition(trigger_gr, title="Alert: GET READY", message="GET READY {{ticker}} | Pattern Found")
