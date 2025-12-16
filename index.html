@@ -56,10 +56,15 @@ var label[] weekly_labels = array.new_label()
 int p1_pole_min_bars = 2
 int p1_flag_min_bars = 1
 int p1_flag_max_bars = 5
-bool p1_use_depth = input.bool(true, "Max Pullback Depth (30%)?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The pullback must not exceed 30% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
+bool p1_use_depth = input.bool(true, "Max Pullback Depth (50%)?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The pullback must not exceed 50% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
 bool p1_use_vol = input.bool(true, "Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Average volume of the flag (red) candles must be lower than the average volume of the pole (green) candles.")
 bool p1_use_breakout_vol = input.bool(true, "Breakout Vol > Flag Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
 bool use_green_bar = input.bool(true, "Entry Candle Must be Green?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The candle that triggers the entry must be Green (Close > Open).")
+
+// --- NEW WICK FILTERS ---
+bool p1_avoid_wick = input.bool(true, "Avoid Pole Top Wick?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Cancel pattern if the last candle of the surge (the top) has a long upper wick.")
+// CHANGE: Default set to 0.33 (33%) per request
+float p1_wick_ratio = input.float(0.33, "Pole Top Wick/Body Ratio", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="If 'Avoid Pole Top Wick' is ON: The pattern is invalid if Upper Wick > (Body * Ratio). Example: 0.33 means wick larger than 1/3rd of body is rejected.")
 
 // ====================================
 // 3. LOGIC: RESET MECHANISM
@@ -114,6 +119,21 @@ find_bull_flag() =>
         if is_pole
             int vol_threshold = math.floor(p1_pole_min_bars / 2)
             if high_vol_count < vol_threshold
+                is_pole := false
+
+        // --- NEW WICK FILTER LOGIC ---
+        // If the top of the pole (pole_end_idx) has a long upper wick, reject the pattern
+        if is_pole and p1_avoid_wick
+            float top_high = high[pole_end_idx]
+            float top_open = open[pole_end_idx]
+            float top_close = close[pole_end_idx]
+            
+            float u_wick = top_high - math.max(top_open, top_close)
+            float body = math.abs(top_close - top_open)
+            
+            // Rejection Condition: Wick > Body * Ratio
+            // We use >= on ratio to catch cases where body is 0 (doji)
+            if u_wick > (body * p1_wick_ratio)
                 is_pole := false
 
         if is_pole
@@ -178,7 +198,7 @@ find_bull_flag() =>
                 
                 // Specific Flag Filters
                 bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol)
-                bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.30)
+                bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
 
                 if depth_rule_passed and vol_rule_passed
                     ret_entry := potential_entry
