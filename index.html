@@ -331,6 +331,34 @@ bool trigger_buy = pattern_detected and
 if time < lookback_start_time
     trigger_buy := false
 
+// --- MASTER GR (GET READY) TRIGGER ---
+// Triggers if pattern is found and valid, but breakout hasn't happened yet.
+bool trigger_gr = pattern_detected and
+     not cond_breakout and // Strictly NOT broken out yet
+     (not use_no_trade or cond_no_trade) and 
+     (not use_cooldown or cond_cooldown) and 
+     (not use_macd_filter or cond_macd) and
+     (not use_vwap_filter or cond_vwap) and
+     (not use_hod_filter or cond_tp_valid) and
+     cond_p1_vol
+
+if time < lookback_start_time
+    trigger_gr := false
+
+// Draw GR Label
+if trigger_gr
+    label gr_lbl = label.new(
+         x=bar_index, 
+         y=low, 
+         text="GR", 
+         color=color.orange, 
+         textcolor=color.white, 
+         style=label.style_label_up, 
+         yloc=yloc.belowbar,
+         text_formatting=text.format_bold
+    )
+    array.push(weekly_labels, gr_lbl)
+
 if trigger_buy
     in_trade := true
     status_txt := pattern_name + " ENTRY"
@@ -412,3 +440,22 @@ if barstate.islast
     table.merge_cells(dashboard, 1, 0, 2, 0)
     table.merge_cells(dashboard, 0, 2, 0, 3)
     table.merge_cells(dashboard, 3, 1, 3, 3)
+
+// ====================================
+// 8. ALERT CONFIGURATION
+// ====================================
+
+// --- OPTION A: ONE ALERT FOR BOTH (Same Sound) ---
+// Instructions: In TradingView Alert menu, select Condition: "Rom Master..." -> "Any alert() function call".
+if trigger_buy
+    alert("BUY SIGNAL | " + syminfo.ticker + " | Entry: " + str.tostring(final_entry) + " | SL: " + str.tostring(raw_sl), alert.freq_once_per_bar_close)
+else if trigger_gr
+    alert("GET READY | " + syminfo.ticker + " | Pattern Detected. Watch for breakout.", alert.freq_once_per_bar_close)
+
+// --- OPTION B: SEPARATE ALERTS (Different Sounds) ---
+// Instructions: Create TWO separate alerts in the menu.
+// Alert 1: Select Condition "Alert: BUY Signal". Set sound to 'Bell'.
+// Alert 2: Select Condition "Alert: GET READY". Set sound to 'Chime'.
+
+alertcondition(trigger_buy, title="Alert: BUY Signal", message="BUY {{ticker}} | Price: {{close}} | Check Chart")
+alertcondition(trigger_gr, title="Alert: GET READY", message="GET READY {{ticker}} | Pattern Found")
