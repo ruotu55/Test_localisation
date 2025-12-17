@@ -18,7 +18,14 @@ bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="═
 int cooldown = 2
 float vol_ma_10 = ta.sma(volume, 10)
 float vwap_val = ta.vwap(close)
-[macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
+
+// --- MACD SETTINGS (Matches User Image) ---
+int macd_fast_len = input.int(12, "FastLength", group="═════ MACD SETTINGS ═════")
+int macd_slow_len = input.int(26, "SlowLength", group="═════ MACD SETTINGS ═════")
+float macd_src = input.source(close, "Source", group="═════ MACD SETTINGS ═════")
+int macd_sig_len = input.int(9, "SignalLength", group="═════ MACD SETTINGS ═════")
+
+[macd_line, signal_line, _] = ta.macd(macd_src, macd_fast_len, macd_slow_len, macd_sig_len)
 float ema_9 = ta.ema(close, 9)
 
 // --- FIXED: MANUAL DAY HIGH TRACKER (Using varip for realtime spikes) ---
@@ -234,7 +241,7 @@ find_bull_flag() =>
                     float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                     float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
                     float avg_flag_vol = flag_vol_sum 
-                     
+                      
                     bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol)
                     bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
 
@@ -279,13 +286,13 @@ find_abcd() =>
                     float high_b = 0.0
                     int temp_idx_b = idx_b_start
                     float vol_sum_b = 0.0
-                     
+                      
                     for k = idx_b_start to idx_b_end
                         if high[k] >= high_b
                             high_b := high[k]
                             temp_idx_b := k 
                         vol_sum_b += volume[k]
-                     
+                      
                     if is_b_valid
                         for k = 1 to len_c
                             if high[k] >= high_b
@@ -379,6 +386,7 @@ find_abcd() =>
 
 // --- COMMON INDICATORS FOR FILTERS ---
 bool cond_green_bar = close > open
+// MACD Condition: Trigger when MACD > 0 and MACD Line > Signal Line (Open)
 bool cond_macd_ok = macd_line > 0 and macd_line > signal_line
 bool cond_vwap_ok = close > vwap_val
 
