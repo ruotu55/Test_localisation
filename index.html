@@ -80,7 +80,6 @@ bool p1_enabled = input.bool(true, "MASTER SWITCH: Enable Bull Flag", group="═
 // --- P1 FILTERS (Independent) ---
 bool p1_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 bool p1_use_vwap = input.bool(true, "Filter: Price > VWAP?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
-bool p1_use_hod = input.bool(true, "Filter: TP <= Day High?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Do not create a buy signal if the calculated Take Profit is above the current High of the Day.")
 bool p1_use_psych = input.bool(true, "Filter: Clear Psych Levels?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 
 // --- P1 STRUCTURE CONFIG ---
@@ -104,7 +103,6 @@ bool p2_enabled = input.bool(true, "MASTER SWITCH: Enable ABCD", group="══�
 // --- P2 FILTERS (Independent) ---
 bool p2_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 bool p2_use_vwap = input.bool(true, "Filter: Price > VWAP?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
-bool p2_use_hod = input.bool(true, "Filter: TP <= Day High?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = Do not create a buy signal if the calculated Take Profit is above the current High of the Day.")
 bool p2_use_psych = input.bool(true, "Filter: Clear Psych Levels?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 
 // --- P2 STRUCTURE CONFIG ---
@@ -414,8 +412,6 @@ if valid_p1
         valid_p1 := false
     if p1_use_vwap and not cond_vwap_ok
         valid_p1 := false
-    if p1_use_hod and p1_tp > daily_high
-        valid_p1 := false
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
         valid_p1 := false
     if ((p1_tp - p1_final_entry) - commission_per_share) < 0.1
@@ -442,8 +438,6 @@ if valid_p2
     if p2_use_macd and not cond_macd_ok
         valid_p2 := false
     if p2_use_vwap and not cond_vwap_ok
-        valid_p2 := false
-    if p2_use_hod and p2_tp > daily_high
         valid_p2 := false
     if p2_use_breakout_vol and volume_check <= p2_ref_vol
         valid_p2 := false
