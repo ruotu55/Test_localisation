@@ -80,7 +80,6 @@ bool p1_enabled = input.bool(true, "MASTER SWITCH: Enable Bull Flag", group="═
 // --- P1 FILTERS (Independent) ---
 bool p1_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 bool p1_use_vwap = input.bool(true, "Filter: Price > VWAP?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
-bool p1_use_psych = input.bool(true, "Filter: Clear Psych Levels?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 
 // --- P1 STRUCTURE CONFIG ---
 int p1_pole_min_bars = 2
@@ -104,7 +103,6 @@ bool p2_enabled = input.bool(true, "MASTER SWITCH: Enable ABCD", group="══�
 // --- P2 FILTERS (Independent) ---
 bool p2_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = Entry allowed only if MACD is positive (>0) and the MACD line is above the Signal line.")
 bool p2_use_vwap = input.bool(true, "Filter: Price > VWAP?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = Entry allowed only if the price (Close) is above the Volume Weighted Average Price.")
-bool p2_use_psych = input.bool(true, "Filter: Clear Psych Levels?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = If the pattern entry is slightly below a Whole ($X.00) or Half ($X.50) dollar level, move the entry price slightly ABOVE it to clear resistance.")
 
 // --- P2 STRUCTURE CONFIG ---
 bool p2_use_green = true 
@@ -393,12 +391,6 @@ if barstate.isrealtime
 
 // --- PROCESS P1 (BULL FLAG) ---
 float p1_final_entry = p1_raw_entry
-if p1_found and p1_use_psych
-    float nw = math.ceil(p1_raw_entry)
-    float nh = math.ceil(p1_raw_entry * 2.0) / 2.0
-    float nr = math.min(nw, nh)
-    if (nr - p1_raw_entry) > 0 and (nr - p1_raw_entry) < (p1_raw_entry * 0.005)
-        p1_final_entry := nr + syminfo.mintick
 
 float p1_risk = p1_final_entry - p1_raw_sl
 if p1_risk <= 0
@@ -420,12 +412,6 @@ if valid_p1
 
 // --- PROCESS P2 (ABCD) ---
 float p2_final_entry = p2_raw_entry
-if p2_found and p2_use_psych
-    float nw = math.ceil(p2_raw_entry)
-    float nh = math.ceil(p2_raw_entry * 2.0) / 2.0
-    float nr = math.min(nw, nh)
-    if (nr - p2_raw_entry) > 0 and (nr - p2_raw_entry) < (p2_raw_entry * 0.005)
-        p2_final_entry := nr + syminfo.mintick
 
 float p2_risk = p2_final_entry - p2_raw_sl
 if p2_risk <= 0
