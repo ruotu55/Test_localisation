@@ -19,13 +19,8 @@ int cooldown = 2
 float vol_ma_10 = ta.sma(volume, 10)
 float vwap_val = ta.vwap(close)
 
-// --- MACD SETTINGS (Matches User Image) ---
-int macd_fast_len = input.int(12, "FastLength", group="═════ MACD SETTINGS ═════")
-int macd_slow_len = input.int(26, "SlowLength", group="═════ MACD SETTINGS ═════")
-float macd_src = input.source(close, "Source", group="═════ MACD SETTINGS ═════")
-int macd_sig_len = input.int(9, "SignalLength", group="═════ MACD SETTINGS ═════")
-
-[macd_line, signal_line, _] = ta.macd(macd_src, macd_fast_len, macd_slow_len, macd_sig_len)
+// --- MACD SETTINGS (Hardcoded) ---
+[macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
 float ema_9 = ta.ema(close, 9)
 
 // --- FIXED: MANUAL DAY HIGH TRACKER (Using varip for realtime spikes) ---
