@@ -418,7 +418,7 @@ if valid_p1
         valid_p1 := false
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
         valid_p1 := false
-    if ((p1_tp - p1_final_entry) - commission_per_share) < 0.25
+    if ((p1_tp - p1_final_entry) - commission_per_share) < 0.1
         valid_p1 := false
 
 // --- PROCESS P2 (ABCD) ---
