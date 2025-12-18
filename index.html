@@ -89,7 +89,7 @@ int p1_pole_min_bars = 2
 int p1_flag_min_bars = 1
 int p1_flag_max_bars = 5
 bool p1_use_green = true 
-bool p1_strict_ema = input.bool(true, "Structure: Lows > 9 EMA?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The lowest points of the flag must remain above the 9 EMA.")
+bool p1_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The body (Open/Close) of the flag must remain above the 9 EMA. Wicks are ignored.")
 bool p1_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The pullback must not exceed 50% of the FULL surge length (Text recommends top 25%).\nOFF = Ignore pullback depth.")
 bool p1_use_vol = input.bool(true, "Structure: Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = Average volume of the flag candles must be lower than the average volume of the pole candles OR lower than the volume of the top candle.")
 bool p1_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Flag Vol?", group="═════ PATTERN 1: BULL FLAG ═════", tooltip="ON = The breakout candle volume must be higher than the average volume of the flag candles.")
@@ -109,7 +109,7 @@ bool p2_use_vwap = input.bool(true, "Filter: Price > VWAP?", group="════
 
 // --- P2 STRUCTURE CONFIG ---
 bool p2_use_green = true 
-bool p2_strict_ema = input.bool(true, "Structure: Lows > 9 EMA?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = The lows of Point A and Point C must be above the 9 EMA.")
+bool p2_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = The bodies of Point A and Point C must be above the 9 EMA. Wicks are ignored.")
 bool p2_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 2: ABCD ═════", tooltip="ON = The first pullback (Point A) must not exceed 50% of the initial surge.")
 bool p2_check_hod = true 
 bool p2_c_below_b = true 
@@ -208,7 +208,8 @@ find_bull_flag() =>
                 bool has_green_tip = close[1] > open[1]
                   
                 if has_green_tip
-                    if f_len < 2 or high[1] >= high[2] or (p1_strict_ema and low[1] < ema_9[1])
+                    // Fix: Check Body (math.min(open, close)) against EMA, not Low
+                    if f_len < 2 or high[1] >= high[2] or (p1_strict_ema and math.min(open[1], close[1]) < ema_9[1])
                         is_valid_flag := false
                     else
                         flag_vol_sum := volume[1]
@@ -216,7 +217,8 @@ find_bull_flag() =>
                         potential_entry := high[1]
                         potential_sl := low[1]
                         for k = 2 to f_len
-                            if close[k] >= open[k] or (p1_strict_ema and low[k] < ema_9[k])
+                            // Fix: Check Body against EMA, not Low
+                            if close[k] >= open[k] or (p1_strict_ema and math.min(open[k], close[k]) < ema_9[k])
                                 is_valid_flag := false
                                 break
                             else
@@ -226,7 +228,8 @@ find_bull_flag() =>
                     potential_sl := low[1]
                     flag_vol_sum := volume[1]
                     for k = 1 to f_len
-                        if close[k] >= open[k] or (p1_strict_ema and low[k] < ema_9[k])
+                        // Fix: Check Body against EMA, not Low
+                        if close[k] >= open[k] or (p1_strict_ema and math.min(open[k], close[k]) < ema_9[k])
                             is_valid_flag := false
                             break
                         else
@@ -238,7 +241,7 @@ find_bull_flag() =>
                     float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                     float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
                     float avg_flag_vol = flag_vol_sum 
-                       
+                        
                     bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol or avg_flag_vol < top_candle_vol)
                     bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
 
@@ -283,13 +286,13 @@ find_abcd() =>
                     float high_b = 0.0
                     int temp_idx_b = idx_b_start
                     float vol_sum_b = 0.0
-                       
+                        
                     for k = idx_b_start to idx_b_end
                         if high[k] >= high_b
                             high_b := high[k]
                             temp_idx_b := k 
                         vol_sum_b += volume[k]
-                       
+                        
                     if is_b_valid
                         for k = 1 to len_c
                             if high[k] >= high_b
@@ -315,7 +318,8 @@ find_abcd() =>
                                 is_a_valid := false
                               
                             if is_a_valid and p2_strict_ema
-                                if low_a < ema_9[idx_a_end] or low_c < ema_9[1]
+                                // Fix: Check Body of the specific low candle against EMA at that time
+                                if math.min(open[temp_idx_a], close[temp_idx_a]) < ema_9[temp_idx_a] or math.min(open[temp_idx_c], close[temp_idx_c]) < ema_9[temp_idx_c]
                                     is_a_valid := false
 
                             if is_a_valid
@@ -339,11 +343,11 @@ find_abcd() =>
                                 if surge_cnt >= 2
                                     if p2_check_hod and high_b > surge_high
                                         is_b_valid := false
-                                     
+                                    
                                     for k = idx_a_start to idx_a_end
                                         if high[k] >= surge_high
                                             is_b_valid := false
-                                     
+                                    
                                     for k = idx_b_start to idx_b_end
                                         if low[k] < low_a
                                             is_b_valid := false
@@ -351,14 +355,14 @@ find_abcd() =>
                                     if is_b_valid
                                         float surge_height = surge_high - surge_low
                                         float a_depth = surge_high - low_a
-                                         
+                                          
                                         float depth_ratio = surge_height > 0 ? (a_depth / surge_height) : 1.0
                                         bool depth_ok = not p2_use_depth or (depth_ratio <= 0.50)
-                                         
+                                          
                                         float avg_vol_surge = vol_sum_surge / surge_cnt
                                         float avg_vol_a = vol_sum_a / len_a
                                         bool vol_ok = not p2_use_vol or (avg_vol_a < avg_vol_surge or avg_vol_a < top_candle_vol)
-                                         
+                                          
                                         if depth_ok and vol_ok
                                             f_abcd := true
                                             f_entry := high_b 
@@ -368,7 +372,7 @@ find_abcd() =>
                                             idx_user_b := temp_idx_b
                                             idx_user_c := temp_idx_c
                                             break
-                                     
+                                    
                         if f_abcd 
                             break 
             if f_abcd
