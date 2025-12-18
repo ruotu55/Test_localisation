@@ -20,7 +20,8 @@ float vol_ma_10 = ta.sma(volume, 10)
 float vwap_val = ta.vwap(close)
 
 // --- MACD SETTINGS (Hardcoded) ---
-[macd_line, signal_line, _] = ta.macd(close, 12, 26, 9)
+// Updated to capture Histogram (macd_hist) for momentum checks
+[macd_line, signal_line, macd_hist] = ta.macd(close, 12, 26, 9)
 float ema_9 = ta.ema(close, 9)
 
 // --- FIXED: MANUAL DAY HIGH TRACKER (Using varip for realtime spikes) ---
@@ -133,7 +134,7 @@ if is_reset_bar
     last_exit_bar := -999
     last_entry_bar := -999
     active_trades.clear()
-     
+      
     while array.size(weekly_lines) > 0
         line.delete(array.pop(weekly_lines))
     while array.size(weekly_boxes) > 0
@@ -155,7 +156,7 @@ find_bull_flag() =>
         for f_len = p1_flag_min_bars to p1_flag_max_bars
             int pole_end_idx = f_len + 1
             bool is_pole = true
-             
+              
             int high_vol_count = 0
             for p = 0 to p1_pole_min_bars - 1
                 int idx = pole_end_idx + p
@@ -164,7 +165,7 @@ find_bull_flag() =>
                     break
                 if volume[idx] > vol_ma_10[idx]
                     high_vol_count += 1
-             
+              
             if is_pole
                 int vol_threshold = math.floor(p1_pole_min_bars / 2)
                 if high_vol_count < vol_threshold
@@ -186,7 +187,7 @@ find_bull_flag() =>
                 float pole_vol_sum = 0.0
                 int pole_bar_count = 0
                 int scan_idx = pole_end_idx
-                 
+                  
                 while close[scan_idx] > open[scan_idx]
                     if high[scan_idx] > full_surge_high
                         full_surge_high := high[scan_idx]
@@ -197,15 +198,15 @@ find_bull_flag() =>
                     scan_idx := scan_idx + 1
                     if scan_idx > pole_end_idx + 50
                         break
-                 
+                  
                 bool is_valid_flag = true
                 float lowest_flag_low = high
                 float flag_vol_sum = 0.0
                 float potential_entry = na
                 float potential_sl = na
-                 
+                  
                 bool has_green_tip = close[1] > open[1]
-                 
+                  
                 if has_green_tip
                     if f_len < 2 or high[1] >= high[2] or (p1_strict_ema and low[1] < ema_9[1])
                         is_valid_flag := false
@@ -230,14 +231,14 @@ find_bull_flag() =>
                             break
                         else
                             lowest_flag_low := math.min(lowest_flag_low, low[k])
-                 
+                  
                 if is_valid_flag
                     float pole_height = full_surge_high - full_surge_low
                     float pullback_depth = full_surge_high - lowest_flag_low
                     float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                     float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
                     float avg_flag_vol = flag_vol_sum 
-                      
+                       
                     bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol or avg_flag_vol < top_candle_vol)
                     bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
 
@@ -255,7 +256,7 @@ find_abcd() =>
     float f_entry = na
     float f_sl = na
     float f_ref_vol = 0.0
-     
+      
     // --- OFFSETS FOR VISUALIZATION ---
     int idx_user_a = 0 // Low of A
     int idx_user_b = 0 // High of B
@@ -267,7 +268,7 @@ find_abcd() =>
             float vol_sum_c = 0.0
             float low_c = low[1] 
             int temp_idx_c = 1
-             
+              
             for k = 1 to len_c
                 vol_sum_c += volume[k]
                 if low[k] <= low_c
@@ -282,13 +283,13 @@ find_abcd() =>
                     float high_b = 0.0
                     int temp_idx_b = idx_b_start
                     float vol_sum_b = 0.0
-                      
+                       
                     for k = idx_b_start to idx_b_end
                         if high[k] >= high_b
                             high_b := high[k]
                             temp_idx_b := k 
                         vol_sum_b += volume[k]
-                      
+                       
                     if is_b_valid
                         for k = 1 to len_c
                             if high[k] >= high_b
@@ -303,7 +304,7 @@ find_abcd() =>
                             float low_a = high[idx_a_start]
                             int temp_idx_a = idx_a_start
                             float vol_sum_a = 0.0
-                             
+                              
                             for k = idx_a_start to idx_a_end
                                 if low[k] <= low_a
                                     low_a := low[k]
@@ -312,7 +313,7 @@ find_abcd() =>
 
                             if is_a_valid and low_c < low_a
                                 is_a_valid := false
-                             
+                              
                             if is_a_valid and p2_strict_ema
                                 if low_a < ema_9[idx_a_end] or low_c < ema_9[1]
                                     is_a_valid := false
@@ -324,7 +325,7 @@ find_abcd() =>
                                 float surge_low = low[idx_s_start]
                                 float vol_sum_surge = 0.0
                                 float top_candle_vol = volume[idx_s_start]
-                                 
+                                  
                                 int scan = idx_s_start
                                 while close[scan] > open[scan] and scan < (idx_s_start + 10)
                                     surge_cnt += 1
@@ -334,7 +335,7 @@ find_abcd() =>
                                     surge_low := math.min(surge_low, low[scan])
                                     vol_sum_surge += volume[scan]
                                     scan += 1
-                                 
+                                  
                                 if surge_cnt >= 2
                                     if p2_check_hod and high_b > surge_high
                                         is_b_valid := false
@@ -384,8 +385,12 @@ find_abcd() =>
 
 // --- COMMON INDICATORS FOR FILTERS ---
 bool cond_green_bar = close > open
-// MACD Condition: Trigger when MACD > 0 and MACD Line > Signal Line (Open)
-bool cond_macd_ok = macd_line > 0 and macd_line > signal_line
+
+// --- MODIFIED MACD LOGIC ---
+// 1. macd_line > 0 (Trend is up)
+// 2. AND (Momentum Rising OR Histogram is Positive/Green)
+bool cond_macd_ok = macd_line > 0 and (macd_hist > macd_hist[1] or macd_hist > 0)
+
 bool cond_vwap_ok = close > vwap_val
 
 float volume_check = volume
@@ -448,7 +453,7 @@ if active_trades.size() > 0
     for i = active_trades.size() - 1 to 0
         Trade t = active_trades.get(i)
         bool closed = false
-         
+          
         // Update Visuals (Drag lines forward)
         t.l_e.set_x2(bar_index)
         t.l_tp.set_x2(bar_index)
@@ -462,7 +467,7 @@ if active_trades.size() > 0
             net_profit := net_profit - (gross_loss + total_commission_cost)
             last_exit_bar := bar_index
             status_txt := "Stop Loss Hit"
-             
+              
             t.lbl.set_text("Lose\n" + t.pat)
             t.lbl.set_color(color.red)
             t.lbl.set_style(label.style_label_down)
@@ -476,11 +481,11 @@ if active_trades.size() > 0
             net_profit := net_profit + (gross_profit - total_commission_cost)
             last_exit_bar := bar_index
             status_txt := "Take Profit Hit"
-             
+              
             t.lbl.set_text("Win\n" + t.pat)
             t.lbl.set_color(color.green)
             closed := true
-             
+              
         if closed
             active_trades.remove(i)
 
@@ -495,13 +500,13 @@ if time >= lookback_start_time
     // Determine if we are entering NOW or if we are FORCED to enter because it locked earlier this bar
     bool p1_fresh_trigger = valid_p1 and high >= p1_final_entry
     bool p1_force_entry = p1_lock
-     
+      
     // Limits
     bool slots_available = active_trades.size() < max_concurrent_trades
     bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
 
     if can_enter and (p1_fresh_trigger or p1_force_entry)
-         
+          
         // 1. SAVE SNAPSHOT (Persistence)
         if not p1_lock // If this is the FIRST tick it triggered
             p1_lock := true
@@ -514,10 +519,10 @@ if time >= lookback_start_time
         float use_entry = p1_lock_entry
         float use_sl = p1_lock_sl
         float use_tp = p1_lock_tp
-         
+          
         // 3. Mark Entry Bar
         last_entry_bar := bar_index
-         
+          
         // 4. Create Visuals (Re-created every tick to maintain illusion of persistence)
         line l_e_new = line.new(bar_index, use_entry, bar_index, use_entry, color=color.blue, width=2)
         line l_tp_new = line.new(bar_index, use_tp, bar_index, use_tp, color=color.green, width=2)
@@ -550,13 +555,13 @@ if time >= lookback_start_time
     // Determine if we are entering NOW or if we are FORCED to enter because it locked earlier this bar
     bool p2_fresh_trigger = valid_p2 and high >= p2_final_entry
     bool p2_force_entry = p2_lock
-     
+      
     // Limits
     bool slots_available = active_trades.size() < max_concurrent_trades
     bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
 
     if can_enter and (p2_fresh_trigger or p2_force_entry)
-         
+          
         // 1. SAVE SNAPSHOT (Persistence)
         if not p2_lock // If this is the FIRST tick it triggered
             p2_lock := true
@@ -614,11 +619,11 @@ var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black,
 if barstate.islast
     // Get stats from the MOST RECENT trade if exists, otherwise 0
     Trade last_t = active_trades.size() > 0 ? active_trades.get(active_trades.size() - 1) : na
-     
+      
     string d_tp = na(last_t) ? "0.00" : str.tostring(last_t.tp, format.mintick)
     string d_entry = na(last_t) ? "0.00" : str.tostring(last_t.entry, format.mintick)
     string d_sl = na(last_t) ? "0.00" : str.tostring(last_t.sl, format.mintick)
-     
+      
     table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
@@ -627,18 +632,18 @@ if barstate.islast
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
     table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
     table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
-     
+      
     int active_cnt = active_trades.size()
     bool cooling_down = active_cnt == 0 and (bar_index - last_exit_bar) <= cooldown
     string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : status_txt)
     color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
-     
+      
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
-     
+      
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
     string profit_txt = str.tostring(net_profit, format.mintick) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
-     
+      
     table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
     table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
 
