@@ -17,7 +17,20 @@ bool use_cooldown = input.bool(true, "Pause After Trade (Cooldown)?", group="═
 // --- GLOBAL VARIABLES & INDICATORS ---
 int cooldown = 2
 float vol_ma_10 = ta.sma(volume, 10)
-float vwap_val = ta.vwap(close)
+
+// --- VWAP CALCULATION (Session HLC3 - Matches Standard Indicator) ---
+// We calculate this manually to ensure it resets daily and uses HLC3
+var float vwap_sum_src_vol = 0.0
+var float vwap_sum_vol = 0.0
+
+// FIXED: Added '!= 0' to convert the result to a strict boolean for v6
+if ta.change(time("D")) != 0
+    vwap_sum_src_vol := 0.0
+    vwap_sum_vol := 0.0
+    
+vwap_sum_src_vol += hlc3 * volume
+vwap_sum_vol += volume
+float vwap_val = vwap_sum_src_vol / vwap_sum_vol
 
 // --- MACD SETTINGS (Hardcoded) ---
 [macd_line, signal_line, macd_hist] = ta.macd(close, 12, 26, 9)
@@ -54,9 +67,15 @@ varip float p2_lock_entry = 0.0
 varip float p2_lock_sl = 0.0
 varip float p2_lock_tp = 0.0
 
+varip bool p3_lock = false
+varip float p3_lock_entry = 0.0
+varip float p3_lock_sl = 0.0
+varip float p3_lock_tp = 0.0
+
 if barstate.isnew
     p1_lock := false
     p2_lock := false
+    p3_lock := false
 
 // Trade State Variables
 var Trade[] active_trades = array.new<Trade>()
@@ -64,7 +83,7 @@ var int cnt_win = 0
 var int cnt_loss = 0
 var float net_profit = 0.0
 var int last_exit_bar = -999
-var int last_entry_bar = -999 
+var int last_entry_bar = -999
 var string status_txt = "Waiting"
 
 // Visual Arrays
@@ -86,7 +105,7 @@ bool p1_use_vwap = input.bool(true, "Filter: Price > VWAP? (MANDATORY)", group="
 int p1_pole_min_bars = 2
 int p1_flag_min_bars = 1
 int p1_flag_max_bars = 5
-bool p1_use_green = true 
+bool p1_use_green = true
 bool p1_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_vol = input.bool(true, "Structure: Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════")
@@ -107,16 +126,28 @@ bool p2_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═�
 bool p2_use_vwap = input.bool(true, "Filter: Price > VWAP? (MANDATORY)", group="═════ PATTERN 2: ABCD ═════")
 
 // --- P2 STRUCTURE CONFIG ---
-bool p2_use_green = true 
+bool p2_use_green = true
 bool p2_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 2: ABCD ═════")
 bool p2_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 2: ABCD ═════")
-bool p2_check_hod = true 
-bool p2_c_below_b = true 
+bool p2_check_hod = true
+bool p2_c_below_b = true
 bool p2_use_vol = input.bool(true, "Structure: Pullback Vol < Surge Vol?", group="═════ PATTERN 2: ABCD ═════")
 bool p2_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Pullback Vol? (MANDATORY)", group="═════ PATTERN 2: ABCD ═════")
 
 // ====================================
-// 4. LOGIC: RESET MECHANISM
+// 4. PATTERN 3: VWAP BREAK SETTINGS
+// ====================================
+bool p3_enabled = input.bool(true, "MASTER SWITCH: Enable VWAP Break", group="═════ PATTERN 3: VWAP BREAK ═════")
+
+// --- P3 FILTERS & SETTINGS ---
+int p3_bars_required = input.int(8, "Setup Bars Below VWAP", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="How many closed candles must be strictly below VWAP before a breakout is valid.")
+bool p3_use_macd = input.bool(true, "Filter: MACD Open? (Hard Switch)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="If enabled, signals are BLOCKED if MACD is not open. No failure counting allowed.")
+float p3_gr_dist = input.float(0.10, "Get Ready Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="Price must be within this distance below VWAP to trigger 'Get Ready'.")
+float p3_sl_dist = input.float(0.10, "Stop Loss Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="Stop Loss placed this amount below VWAP.")
+// Removed Option: Automatic logic selects the lower of HOD or Next Half Dollar
+
+// ====================================
+// 5. LOGIC: RESET MECHANISM
 // ====================================
 int y = year(timenow, syminfo.timezone)
 int m = month(timenow, syminfo.timezone)
@@ -133,7 +164,6 @@ if is_reset_bar
     last_exit_bar := -999
     last_entry_bar := -999
     active_trades.clear()
-      
     while array.size(weekly_lines) > 0
         line.delete(array.pop(weekly_lines))
     while array.size(weekly_boxes) > 0
@@ -142,7 +172,7 @@ if is_reset_bar
         label.delete(array.pop(weekly_labels))
 
 // ====================================
-// 5. PATTERN RECOGNITION FUNCTIONS
+// 6. PATTERN RECOGNITION FUNCTIONS
 // ====================================
 
 find_bull_flag() =>
@@ -157,7 +187,6 @@ find_bull_flag() =>
             int pole_end_idx = f_len + 1
             bool is_pole = true
             int current_p1_fails = 0
-              
             int high_vol_count = 0
             for p = 0 to p1_pole_min_bars - 1
                 int idx = pole_end_idx + p
@@ -166,7 +195,6 @@ find_bull_flag() =>
                     break
                 if volume[idx] > vol_ma_10[idx]
                     high_vol_count += 1
-              
             if is_pole
                 int vol_threshold = math.floor(p1_pole_min_bars / 2)
                 if high_vol_count < vol_threshold
@@ -188,7 +216,6 @@ find_bull_flag() =>
                 float pole_vol_sum = 0.0
                 int pole_bar_count = 0
                 int scan_idx = pole_end_idx
-                  
                 while close[scan_idx] > open[scan_idx]
                     if high[scan_idx] > full_surge_high
                         full_surge_high := high[scan_idx]
@@ -199,59 +226,50 @@ find_bull_flag() =>
                     scan_idx := scan_idx + 1
                     if scan_idx > pole_end_idx + 50
                         break
-                  
                 bool is_valid_flag = true
                 float lowest_flag_low = high
                 float flag_vol_sum = 0.0
                 float potential_entry = 0.0
                 float potential_sl = 0.0
-                  
                 bool has_green_tip = close[1] > open[1]
-                  
                 if has_green_tip
                     // EMA Structure Check (Flexible)
                     if f_len < 2 or high[1] >= high[2]
                         is_valid_flag := false
                     else if p1_strict_ema and math.min(open[1], close[1]) < ema_9[1]
                         current_p1_fails += 1
-                         
                     if is_valid_flag
                         flag_vol_sum := volume[1]
                         lowest_flag_low := math.min(lowest_flag_low, low[1])
                         potential_entry := high[1]
                         potential_sl := low[1]
                         for k = 2 to f_len
-                            if close[k] >= open[k] 
+                            if close[k] >= open[k]
                                 is_valid_flag := false
                                 break
                             if p1_strict_ema and math.min(open[k], close[k]) < ema_9[k]
                                 current_p1_fails += 1
-                            
                             lowest_flag_low := math.min(lowest_flag_low, low[k])
                 else
                     potential_entry := high[1]
                     potential_sl := low[1]
                     flag_vol_sum := volume[1]
                     for k = 1 to f_len
-                        if close[k] >= open[k] 
+                        if close[k] >= open[k]
                             is_valid_flag := false
                             break
                         if p1_strict_ema and math.min(open[k], close[k]) < ema_9[k]
                             current_p1_fails += 1
-                        
                         lowest_flag_low := math.min(lowest_flag_low, low[k])
-                  
                 if is_valid_flag
                     float pole_height = full_surge_high - full_surge_low
                     float pullback_depth = full_surge_high - lowest_flag_low
                     float depth_ratio = pole_height > 0 ? (pullback_depth / pole_height) : 1.0
                     float avg_pole_vol = pole_bar_count > 0 ? pole_vol_sum / pole_bar_count : 0.0
-                    float avg_flag_vol = flag_vol_sum 
-                        
+                    float avg_flag_vol = flag_vol_sum
                     bool vol_rule_passed = not p1_use_vol or (avg_flag_vol < avg_pole_vol or avg_flag_vol < top_candle_vol)
                     if not vol_rule_passed
                         current_p1_fails += 1
-                         
                     bool depth_rule_passed = not p1_use_depth or (depth_ratio <= 0.50)
                     if not depth_rule_passed
                         current_p1_fails += 1
@@ -261,7 +279,7 @@ find_bull_flag() =>
                     ret_flag_vol := avg_flag_vol
                     ret_found := true
                     ret_fails := current_p1_fails
-                    break 
+                    break
 
     [ret_found, ret_entry, ret_sl, ret_flag_vol, ret_fails]
 
@@ -271,24 +289,22 @@ find_abcd() =>
     float f_sl = 0.0
     float f_ref_vol = 0.0
     int ret_fails = 0
-      
     // --- OFFSETS FOR VISUALIZATION ---
-    int idx_user_a = 0 
-    int idx_user_b = 0 
-    int idx_user_c = 0 
+    int idx_user_a = 0
+    int idx_user_b = 0
+    int idx_user_c = 0
 
     if p2_enabled
         for len_c = 2 to 5
             bool is_c_valid = true
             float vol_sum_c = 0.0
-            float low_c = low[1] 
+            float low_c = low[1]
             int temp_idx_c = 1
-              
             for k = 1 to len_c
                 vol_sum_c += volume[k]
                 if low[k] <= low_c
                     low_c := low[k]
-                    temp_idx_c := k 
+                    temp_idx_c := k
 
             if is_c_valid
                 int idx_b_start = len_c + 1
@@ -299,13 +315,11 @@ find_abcd() =>
                     int temp_idx_b = idx_b_start
                     float vol_sum_b = 0.0
                     int current_p2_fails = 0
-                      
                     for k = idx_b_start to idx_b_end
                         if high[k] >= high_b
                             high_b := high[k]
-                            temp_idx_b := k 
+                            temp_idx_b := k
                         vol_sum_b += volume[k]
-                      
                     if is_b_valid
                         for k = 1 to len_c
                             if high[k] >= high_b
@@ -320,16 +334,14 @@ find_abcd() =>
                             float low_a = high[idx_a_start]
                             int temp_idx_a = idx_a_start
                             float vol_sum_a = 0.0
-                              
                             for k = idx_a_start to idx_a_end
                                 if low[k] <= low_a
                                     low_a := low[k]
-                                    temp_idx_a := k 
+                                    temp_idx_a := k
                                 vol_sum_a += volume[k]
 
                             if is_a_valid and low_c < low_a
                                 is_a_valid := false
-                              
                             if is_a_valid and p2_strict_ema
                                 if math.min(open[temp_idx_a], close[temp_idx_a]) < ema_9[temp_idx_a] or math.min(open[temp_idx_c], close[temp_idx_c]) < ema_9[temp_idx_c]
                                     current_p2_fails += 1
@@ -341,7 +353,6 @@ find_abcd() =>
                                 float surge_low = low[idx_s_start]
                                 float vol_sum_surge = 0.0
                                 float top_candle_vol = volume[idx_s_start]
-                                  
                                 int scan = idx_s_start
                                 while close[scan] > open[scan] and scan < (idx_s_start + 10)
                                     surge_cnt += 1
@@ -351,15 +362,12 @@ find_abcd() =>
                                     surge_low := math.min(surge_low, low[scan])
                                     vol_sum_surge += volume[scan]
                                     scan += 1
-                                  
                                 if surge_cnt >= 2
                                     if p2_check_hod and high_b > surge_high
                                         is_b_valid := false
-                                      
                                     for k = idx_a_start to idx_a_end
                                         if high[k] >= surge_high
                                             is_b_valid := false
-                                      
                                     for k = idx_b_start to idx_b_end
                                         if low[k] < low_a
                                             is_b_valid := false
@@ -367,37 +375,33 @@ find_abcd() =>
                                     if is_b_valid
                                         float surge_height = surge_high - surge_low
                                         float a_depth = surge_high - low_a
-                                          
                                         float depth_ratio = surge_height > 0 ? (a_depth / surge_height) : 1.0
                                         bool depth_ok = not p2_use_depth or (depth_ratio <= 0.50)
                                         if not depth_ok
                                             current_p2_fails += 1
-                                          
                                         float avg_vol_surge = vol_sum_surge / surge_cnt
                                         float avg_vol_a = vol_sum_a / len_a
                                         bool vol_ok = not p2_use_vol or (avg_vol_a < avg_vol_surge or avg_vol_a < top_candle_vol)
                                         if not vol_ok
                                             current_p2_fails += 1
-                                          
                                         f_abcd := true
-                                        f_entry := high_b 
-                                        f_sl := low_c 
-                                        f_ref_vol := avg_vol_a 
+                                        f_entry := high_b
+                                        f_sl := low_c
+                                        f_ref_vol := avg_vol_a
                                         idx_user_a := temp_idx_a
                                         idx_user_b := temp_idx_b
                                         idx_user_c := temp_idx_c
                                         ret_fails := current_p2_fails
                                         break
-                                  
-                        if f_abcd 
-                            break 
-            if f_abcd
-                break 
+                        if f_abcd
+                            break
+                if f_abcd
+                    break
 
     [f_abcd, f_entry, f_sl, f_ref_vol, idx_user_a, idx_user_b, idx_user_c, ret_fails]
 
 // ====================================
-// 6. SIGNAL AGGREGATION & FILTERING
+// 7. SIGNAL AGGREGATION & FILTERING
 // ====================================
 
 [p1_found, p1_raw_entry, p1_raw_sl, p1_ref_vol, p1_int_fails] = find_bull_flag()
@@ -425,16 +429,12 @@ bool valid_p1 = p1_found
 
 if valid_p1
     int p1_total_fails = p1_int_fails
-    
     if p1_use_macd and not cond_macd_ok
         p1_total_fails += 1
-        
     if p1_use_vwap and not cond_vwap_ok
         valid_p1 := false
-        
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
         valid_p1 := false
-        
     if p1_total_fails > p1_allowed_fails
         valid_p1 := false
 
@@ -454,13 +454,11 @@ bool valid_p2 = p2_found
 
 if valid_p2
     int p2_total_fails = p2_int_fails
-    
     if p2_use_macd and not cond_macd_ok
         p2_total_fails += 1
 
     if p2_use_vwap and not cond_vwap_ok
         valid_p2 := false
-        
     if p2_use_breakout_vol and volume_check <= p2_ref_vol
         valid_p2 := false
 
@@ -472,8 +470,54 @@ if valid_p2
     if ((p2_tp - p2_final_entry) - commission_per_share) < 0.25
         valid_p2 := false
 
+// --- PROCESS P3 (VWAP Break) ---
+bool valid_p3 = p3_enabled
+
+// 1. Setup: Confirm previous X bars were strictly below VWAP
+// Shifted by [1] to ensure we check the COMPLETED bars before the current breakout bar
+bool under_vwap_series = close < vwap_val
+// We use math.sum to count how many of the last N bars were under.
+// If count == required, then ALL were under.
+float count_under = math.sum(under_vwap_series ? 1.0 : 0.0, p3_bars_required)
+bool p3_setup_valid = count_under[1] == p3_bars_required
+
+// 2. Proximity: Is it within the Get Ready distance?
+// We check if the current price is close enough (but still under) or just breaking
+bool p3_is_near = (vwap_val - close) <= p3_gr_dist and close < vwap_val
+
+// 3. Trigger Condition for THIS bar
+// Requirement: Setup was valid (8 bars under), and NOW high crosses VWAP
+bool p3_cross_trigger = p3_setup_valid and high >= vwap_val and (open < vwap_val or low < vwap_val)
+
+if p3_enabled
+    // Filter: MACD (Strict - no failures allowed)
+    if p3_use_macd and not cond_macd_ok
+        valid_p3 := false
+    
+    // Validate trigger logic
+    if not p3_cross_trigger
+        valid_p3 := false
+
+float p3_final_entry = vwap_val
+float p3_final_sl = vwap_val - p3_sl_dist
+float p3_final_tp = 0.0
+
+// AUTOMATIC TP SELECTION: Choose lower of HOD or Next Half/Whole Dollar
+float next_half = math.ceil(p3_final_entry * 2) / 2
+if next_half <= p3_final_entry
+    next_half := next_half + 0.5
+
+// Only consider daily_high if it is strictly above the entry
+float potential_hod = daily_high > p3_final_entry ? daily_high : 1000000.0
+
+p3_final_tp := math.min(potential_hod, next_half)
+
+// Ensure TP is logically above Entry (safety check)
+if p3_final_tp <= p3_final_entry
+    p3_final_tp := p3_final_entry + (p3_sl_dist * 2) 
+
 // ====================================
-// 7. GENERIC TRADE EXECUTION
+// 8. GENERIC TRADE EXECUTION
 // ====================================
 
 float total_commission_cost = commission_per_share * trade_qty
@@ -483,7 +527,6 @@ if active_trades.size() > 0
     for i = active_trades.size() - 1 to 0
         Trade t = active_trades.get(i)
         bool closed = false
-          
         t.l_e.set_x2(bar_index)
         t.l_tp.set_x2(bar_index)
         t.l_sl.set_x2(bar_index)
@@ -509,7 +552,6 @@ if active_trades.size() > 0
             t.lbl.set_text("Win\n" + t.pat)
             t.lbl.set_color(color.green)
             closed := true
-              
         if closed
             active_trades.remove(i)
 
@@ -527,7 +569,7 @@ if time >= lookback_start_time
     bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
 
     if can_enter and (p1_fresh_trigger or p1_force_entry)
-        if not p1_lock 
+        if not p1_lock
             p1_lock := true
             p1_lock_entry := p1_final_entry
             p1_lock_sl := p1_raw_sl
@@ -538,7 +580,6 @@ if time >= lookback_start_time
         float use_sl = p1_lock_sl
         float use_tp = p1_lock_tp
         last_entry_bar := bar_index
-          
         line l_e_new = line.new(bar_index, use_entry, bar_index, use_entry, color=color.blue, width=2)
         line l_tp_new = line.new(bar_index, use_tp, bar_index, use_tp, color=color.green, width=2)
         line l_sl_new = line.new(bar_index, use_sl, bar_index, use_sl, color=color.red, width=2)
@@ -570,7 +611,7 @@ if time >= lookback_start_time
     bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
 
     if can_enter and (p2_fresh_trigger or p2_force_entry)
-        if not p2_lock 
+        if not p2_lock
             p2_lock := true
             p2_lock_entry := p2_final_entry
             p2_lock_sl := p2_raw_sl
@@ -611,7 +652,53 @@ if time >= lookback_start_time
         alert("GET READY | " + syminfo.ticker + " | ABCD Found", alert.freq_once_per_bar)
 
 // ====================================
-// 8. DASHBOARD
+// EXECUTION: PATTERN 3 (VWAP BREAK)
+// ====================================
+if time >= lookback_start_time
+    bool p3_fresh_trigger = valid_p3
+    bool p3_force_entry = p3_lock
+    bool slots_available = active_trades.size() < max_concurrent_trades
+    bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
+
+    if can_enter and (p3_fresh_trigger or p3_force_entry)
+        if not p3_lock
+            p3_lock := true
+            p3_lock_entry := p3_final_entry
+            p3_lock_sl := p3_final_sl
+            p3_lock_tp := p3_final_tp
+            alert("BUY SIGNAL | " + syminfo.ticker + " | VWAP Break", alert.freq_once_per_bar)
+        
+        float use_entry = p3_lock_entry
+        float use_sl = p3_lock_sl
+        float use_tp = p3_lock_tp
+        last_entry_bar := bar_index
+
+        line l_e_new = line.new(bar_index, use_entry, bar_index, use_entry, color=color.blue, width=2)
+        line l_tp_new = line.new(bar_index, use_tp, bar_index, use_tp, color=color.green, width=2)
+        line l_sl_new = line.new(bar_index, use_sl, bar_index, use_sl, color=color.red, width=2)
+        box b_r_new = box.new(bar_index, use_tp, bar_index, use_sl, bgcolor=color.new(color.teal, 85), border_color=color.teal)
+        label lbl_new = label.new(bar_index, low, "BUY\nVWAP", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
+
+        array.push(weekly_lines, l_e_new)
+        array.push(weekly_lines, l_tp_new)
+        array.push(weekly_lines, l_sl_new)
+        array.push(weekly_boxes, b_r_new)
+        array.push(weekly_labels, lbl_new)
+
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "VWAP Break", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new)
+        active_trades.push(new_trade)
+        status_txt := "VWAP Break ENTRY"
+    
+    // Get Ready Logic for VWAP Break
+    // Triggers if close is below VWAP, within distance, and MACD filter passes (if enabled)
+    else if can_enter and not p3_fresh_trigger and not p3_force_entry and p3_is_near and p3_enabled
+        bool filter_ok = not p3_use_macd or cond_macd_ok
+        if filter_ok
+            label gr_lbl = label.new(bar_index, low, "GR\nVWAP", color=color.orange, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
+            array.push(weekly_labels, gr_lbl)
+
+// ====================================
+// 9. DASHBOARD
 // ====================================
 
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
@@ -621,7 +708,6 @@ if barstate.islast
     string d_tp = na(last_t.tp) ? "0.00" : str.tostring(last_t.tp, format.mintick)
     string d_entry = na(last_t.entry) ? "0.00" : str.tostring(last_t.entry, format.mintick)
     string d_sl = na(last_t.sl) ? "0.00" : str.tostring(last_t.sl, format.mintick)
-      
     table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
@@ -630,18 +716,14 @@ if barstate.islast
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
     table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
     table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
-      
     int active_cnt = active_trades.size()
     bool cooling_down = active_cnt == 0 and (bar_index - last_exit_bar) <= cooldown
     string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : status_txt)
     color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
-      
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
-      
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
     string profit_txt = str.tostring(net_profit, format.mintick) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
-      
     table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
     table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
 
