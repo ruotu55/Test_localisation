@@ -1,5 +1,5 @@
 //@version=6
-indicator("Rom Master - Multi-Pattern Strategy", overlay=true)
+indicator("Rom Master - Multi-Pattern Strategy", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
 
 // ====================================
 // 1. GLOBAL CONFIGURATION & GENERICS
@@ -109,7 +109,7 @@ bool p1_use_green = true
 bool p1_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_vol = input.bool(true, "Structure: Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════")
-bool p1_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Flag Vol? (MANDATORY)", group="═════ PATTERN 1: BULL FLAG ═════")
+bool p1_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Flag Vol?", group="═════ PATTERN 1: BULL FLAG ═════")
 
 // --- P1 WICK FILTERS ---
 bool p1_avoid_wick = input.bool(true, "Structure: Avoid Pole Top Wick?", group="═════ PATTERN 1: BULL FLAG ═════")
@@ -434,7 +434,7 @@ if valid_p1
     if p1_use_vwap and not cond_vwap_ok
         valid_p1 := false
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
-        valid_p1 := false
+        p1_total_fails += 1
     if p1_total_fails > p1_allowed_fails
         valid_p1 := false
 
@@ -704,10 +704,34 @@ if time >= lookback_start_time
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
 
 if barstate.islast
-    Trade last_t = active_trades.size() > 0 ? active_trades.get(active_trades.size() - 1) : Trade.new(na, na, na, "", line(na), line(na), line(na), box(na), label(na))
-    string d_tp = na(last_t.tp) ? "0.00" : str.tostring(last_t.tp, format.mintick)
-    string d_entry = na(last_t.entry) ? "0.00" : str.tostring(last_t.entry, format.mintick)
-    string d_sl = na(last_t.sl) ? "0.00" : str.tostring(last_t.sl, format.mintick)
+    // REAL-TIME VALUE SELECTION: 
+    // Prioritize active trades first. If no trade is active, check for pending signals (Valid Patterns)
+    float d_entry_val = na
+    float d_sl_val = na
+    float d_tp_val = na
+
+    if active_trades.size() > 0
+        Trade last_t = active_trades.get(active_trades.size() - 1)
+        d_entry_val := last_t.entry
+        d_sl_val := last_t.sl
+        d_tp_val := last_t.tp
+    else if valid_p1
+        d_entry_val := p1_final_entry
+        d_sl_val := p1_raw_sl
+        d_tp_val := p1_tp
+    else if valid_p2
+        d_entry_val := p2_final_entry
+        d_sl_val := p2_raw_sl
+        d_tp_val := p2_tp
+    else if p3_is_near and p3_enabled
+        d_entry_val := p3_final_entry
+        d_sl_val := p3_final_sl
+        d_tp_val := p3_final_tp
+
+    string d_tp = na(d_tp_val) ? "0.00" : str.tostring(d_tp_val, format.mintick)
+    string d_entry = na(d_entry_val) ? "0.00" : str.tostring(d_entry_val, format.mintick)
+    string d_sl = na(d_sl_val) ? "0.00" : str.tostring(d_sl_val, format.mintick)
+
     table.cell(dashboard, 0, 0, "Perf (" + str.tostring(lookback_days) + "d | " + str.tostring(trade_qty) + "s)", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 1, 0, "Trade Values", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
     table.cell(dashboard, 3, 0, "Status", text_color=color.white, text_size=size.normal, text_formatting=text.format_bold)
@@ -716,11 +740,17 @@ if barstate.islast
     table.cell(dashboard, 0, 1, wl_text, text_color=color.white)
     table.cell(dashboard, 1, 1, "TP:", text_color=color.green, text_halign=text.align_left)
     table.cell(dashboard, 2, 1, d_tp, text_color=color.white, text_halign=text.align_right)
+    
     int active_cnt = active_trades.size()
     bool cooling_down = active_cnt == 0 and (bar_index - last_exit_bar) <= cooldown
-    string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : status_txt)
-    color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
+    
+    // Status text logic: Prioritize showing "Get Ready" in the table if a signal is pending
+    string pending_txt = valid_p1 ? "P1 Pending" : (valid_p2 ? "P2 Pending" : (p3_is_near and p3_enabled ? "VWAP Near" : status_txt))
+    string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : pending_txt)
+    
+    color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : (pending_txt != "Waiting" ? color.orange : color.white))
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
+    
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
     string profit_txt = str.tostring(net_profit, format.mintick) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
