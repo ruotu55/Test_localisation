@@ -5,21 +5,21 @@ indicator("Rom Master - Multi-Pattern Strategy", overlay=true)
 // 1. GLOBAL CONFIGURATION & GENERICS
 // ====================================
 
-// --- MANDATORY EXECUTION RULES (TOP PRIORITY) ---
+// This block defines the user-adjustable execution rules for trade frequency and cooldown periods.
 bool use_no_trade = input.bool(false, "BLOCK ENTRY IF TRADE ACTIVE?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Strictly 1 trade at a time.\nOFF = Allows unlimited trades (Stacking).")
-bool show_low_profit = input.bool(true, "SHOW LOW PROFIT TRADES (YELLOW)?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Shows trades with low profit potential in YELLOW (ignored in P&L).\nOFF = Completely hides these trades.")
+bool show_low_profit = input.bool(true, "SHOW LOW PROFIT TRADES?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Shows all trades regardless of profit potential.\nOFF = Hides trades that do not meet the minimum profit threshold.")
 bool use_cooldown = input.bool(false, "PAUSE AFTER TRADE (COOLDOWN)?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
 int cooldown_bars = input.int(2, "Cooldown Duration (Bars)", group="═════ MANDATORY EXECUTION RULES ═════")
 
-// --- MONEY MANAGEMENT & PERFORMANCE ---
+// This block handles money management inputs for share sizing, commission calculations, and the performance lookback window.
 int trade_qty = input.int(250, "Trade Share Size", group="═════ MONEY MANAGEMENT ═════")
 float commission_per_share = input.float(0.02, "Commission (Per Share - Round Trip)", group="═════ MONEY MANAGEMENT ═════", tooltip="Cost per share for a round-trip trade (buy + sell). Example: 0.02 means $50 commission for 2500 shares.")
 int lookback_days = input.int(1, "Performance History (Days)", minval=1, group="═════ MONEY MANAGEMENT ═════", tooltip="Number of calendar days to track performance for. Set to 9999 to track all history.")
 
-// --- GLOBAL VARIABLES & INDICATORS ---
+// This block calculates technical indicators including moving averages and volume metrics for trend and volatility analysis.
 float vol_ma_10 = ta.sma(volume, 10)
 
-// --- VWAP CALCULATION (Session HLC3 - Matches Standard Indicator) ---
+// This logic calculates a session-based Volume Weighted Average Price (VWAP) that resets at the start of every trading day.
 var float vwap_sum_src_vol = 0.0
 var float vwap_sum_vol = 0.0
 
@@ -31,11 +31,11 @@ vwap_sum_src_vol += hlc3 * volume
 vwap_sum_vol += volume
 float vwap_val = vwap_sum_src_vol / vwap_sum_vol
 
-// --- MACD SETTINGS (Hardcoded) ---
+// This block initializes hardcoded MACD and EMA components used for momentum filtering across all patterns.
 [macd_line, signal_line, macd_hist] = ta.macd(close, 12, 26, 9)
 float ema_9 = ta.ema(close, 9)
 
-// --- MANUAL DAY HIGH TRACKER ---
+// This logic tracks the highest price reached during the current trading session for Pattern 3 target calculations.
 varip float daily_high = 0.0
 bool new_day = ta.change(time("D")) != 0
 if new_day
@@ -43,7 +43,7 @@ if new_day
 else
     daily_high := math.max(daily_high, high)
 
-// --- CUSTOM TYPE FOR MULTI-TRADE SUPPORT ---
+// This block defines a custom Trade object to store and manage entry, exit, and visual data for active positions.
 type Trade
     float entry
     float sl
@@ -54,48 +54,43 @@ type Trade
     line l_sl
     box b_risk
     label lbl
-    bool is_real // Added to track if this counts towards P&L
+    bool is_real 
 
-// --- PERSISTENCE LOCKS ---
-// We use varip here to REMEMBER the signal across realtime ticks
+// This section initializes persistence variables to lock trade parameters and prevent recalculation within the same bar.
 varip bool p1_lock = false
 varip float p1_lock_entry = 0.0
 varip float p1_lock_sl = 0.0
 varip float p1_lock_tp = 0.0
-varip bool p1_lock_real = true // Lock for profit status
+varip bool p1_lock_real = true 
 
 varip bool p2_lock = false
 varip float p2_lock_entry = 0.0
 varip float p2_lock_sl = 0.0
 varip float p2_lock_tp = 0.0
-varip bool p2_lock_real = true // Lock for profit status
+varip bool p2_lock_real = true 
 
 varip bool p3_lock = false
 varip float p3_lock_entry = 0.0
 varip float p3_lock_sl = 0.0
 varip float p3_lock_tp = 0.0
-// P3 doesn't have a profit filter in original code, so it's always real
 
 if barstate.isnew
     p1_lock := false
     p2_lock := false
     p3_lock := false
 
-// Trade State Variables
-// FIXED: Must be 'var' (not varip) for Array types.
-// Logic: It resets to empty on every tick, and we re-populate it if a trade is active.
+// This block establishes global arrays and counters for tracking active trades, profit/loss, and timing constraints.
 var Trade[] active_trades = array.new<Trade>()
 var int cnt_win = 0
 var int cnt_loss = 0
 var float net_profit = 0.0
 
-// FIXED: Must be 'var' so it resets on every realtime tick, forcing the redraw logic to run.
 var int last_exit_bar = -999
 var int last_entry_bar = -999
 
 var string status_txt = "Waiting"
 
-// Visual Arrays
+// This block initializes arrays to store and manage visual objects like lines, boxes, and labels for chart display.
 var line[] weekly_lines = array.new_line()
 var box[] weekly_boxes = array.new_box()
 var label[] weekly_labels = array.new_label()
@@ -103,14 +98,14 @@ var label[] weekly_labels = array.new_label()
 // ====================================
 // 2. PATTERN 1: BULL FLAG SETTINGS
 // ====================================
+// This section provides inputs for Pattern 1 to configure filter sensitivity and mandatory technical requirements.
 bool p1_enabled = input.bool(true, "MASTER SWITCH: Enable Bull Flag", group="═════ PATTERN 1: BULL FLAG ═════")
 int p1_allowed_fails = input.int(2, "Max Allowed Filter Failures", minval=0, group="═════ PATTERN 1: BULL FLAG ═════", tooltip="How many filters are allowed to fail while still triggering a buy (excluding Mandatory filters).")
 
-// --- P1 FILTERS (Independent) ---
 bool p1_use_vwap = input.bool(true, "Filter: Price > VWAP? (MANDATORY)", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 1: BULL FLAG ═════")
 
-// --- P1 STRUCTURE CONFIG ---
+// This block defines the structural constraints for Bull Flag detection including bar counts, EMA proximity, and volume ratios.
 int p1_pole_min_bars = 2
 int p1_flag_min_bars = 1
 int p1_flag_max_bars = 5
@@ -120,21 +115,20 @@ bool p1_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", gro
 bool p1_use_vol = input.bool(true, "Structure: Flag Vol < Pole Vol?", group="═════ PATTERN 1: BULL FLAG ═════")
 bool p1_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Flag Vol?", group="═════ PATTERN 1: BULL FLAG ═════")
 
-// --- P1 WICK FILTERS ---
 bool p1_avoid_wick = input.bool(true, "Structure: Avoid Pole Top Wick?", group="═════ PATTERN 1: BULL FLAG ═════")
 float p1_wick_ratio = input.float(0.5, "Structure: Pole Wick Ratio", group="═════ PATTERN 1: BULL FLAG ═════")
 
 // ====================================
 // 3. PATTERN 2: ABCD SETTINGS
 // ====================================
+// This section sets the filtering thresholds and master toggle for the ABCD pattern detection logic.
 bool p2_enabled = input.bool(true, "MASTER SWITCH: Enable ABCD", group="═════ PATTERN 2: ABCD ═════")
 int p2_allowed_fails = input.int(2, "Max Allowed Filter Failures", minval=0, group="═════ PATTERN 2: ABCD ═════")
 
-// --- P2 FILTERS (Independent) ---
 bool p2_use_vwap = input.bool(true, "Filter: Price > VWAP? (MANDATORY)", group="═════ PATTERN 2: ABCD ═════")
 bool p2_use_macd = input.bool(true, "Filter: MACD > 0 & > Signal?", group="═════ PATTERN 2: ABCD ═════")
 
-// --- P2 STRUCTURE CONFIG ---
+// This block configures the geometric and volume rules required to identify a valid ABCD harmonic structure.
 bool p2_use_green = true
 bool p2_strict_ema = input.bool(true, "Structure: Body > 9 EMA?", group="═════ PATTERN 2: ABCD ═════")
 bool p2_use_depth = input.bool(true, "Structure: Max Pullback Depth (50%)?", group="═════ PATTERN 2: ABCD ═════")
@@ -146,17 +140,18 @@ bool p2_use_breakout_vol = input.bool(true, "Structure: Breakout Vol > Pullback 
 // ====================================
 // 4. PATTERN 3: VWAP BREAK SETTINGS
 // ====================================
+// This section manages the setup parameters and distance thresholds for the VWAP breakout pattern.
 bool p3_enabled = input.bool(true, "MASTER SWITCH: Enable VWAP Break", group="═════ PATTERN 3: VWAP BREAK ═════")
 
-// --- P3 FILTERS & SETTINGS ---
-int p3_bars_required = input.int(8, "Setup Bars Below VWAP", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="How many closed candles must be strictly below VWAP before a breakout is valid.")
-bool p3_use_macd = input.bool(true, "Filter: MACD Open? (Hard Switch)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="If enabled, signals are BLOCKED if MACD is not open. No failure counting allowed.")
-float p3_gr_dist = input.float(0.10, "Get Ready Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="Price must be within this distance below VWAP to trigger 'Get Ready'.")
-float p3_sl_dist = input.float(0.10, "Stop Loss Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════", tooltip="Stop Loss placed this amount below VWAP.")
+int p3_bars_required = input.int(8, "Setup Bars Below VWAP", group="═════ PATTERN 3: VWAP BREAK ═════")
+bool p3_use_macd = input.bool(true, "Filter: MACD Open? (Hard Switch)", group="═════ PATTERN 3: VWAP BREAK ═════")
+float p3_gr_dist = input.float(0.10, "Get Ready Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════")
+float p3_sl_dist = input.float(0.10, "Stop Loss Distance (Cents)", group="═════ PATTERN 3: VWAP BREAK ═════")
 
 // ====================================
 // 5. LOGIC: RESET MECHANISM
 // ====================================
+// This logic monitors the time and clears all historical statistics and visual objects when the lookback window starts.
 int y = year(timenow, syminfo.timezone)
 int m = month(timenow, syminfo.timezone)
 int d = dayofmonth(timenow, syminfo.timezone)
@@ -183,6 +178,7 @@ if is_reset_bar
 // 6. PATTERN RECOGNITION FUNCTIONS
 // ====================================
 
+// This function scans historical price and volume data to detect valid Bull Flag pole and flag formations.
 find_bull_flag() =>
     float ret_sl = 0.0
     float ret_entry = 0.0
@@ -241,7 +237,6 @@ find_bull_flag() =>
                 float potential_sl = 0.0
                 bool has_green_tip = close[1] > open[1]
                 if has_green_tip
-                    // EMA Structure Check (Flexible)
                     if f_len < 2 or high[1] >= high[2]
                         is_valid_flag := false
                     else if p1_strict_ema and math.min(open[1], close[1]) < ema_9[1]
@@ -291,6 +286,7 @@ find_bull_flag() =>
 
     [ret_found, ret_entry, ret_sl, ret_flag_vol, ret_fails]
 
+// This function identifies the ABCD pattern by searching for a surge leg followed by specific retracement and consolidation points.
 find_abcd() =>
     bool f_abcd = false
     float f_entry = 0.0
@@ -345,7 +341,7 @@ find_abcd() =>
                                 if low[k] <= low_a
                                     low_a := low[k]
                                     temp_idx_a := k
-                                vol_sum_a += volume[k]
+                                vol_sum_a := vol_sum_a + volume[k]
 
                             if is_a_valid and low_c < low_a
                                 is_a_valid := false
@@ -411,12 +407,12 @@ find_abcd() =>
 // 7. SIGNAL AGGREGATION & FILTERING
 // ====================================
 
+// This block executes the pattern functions and calculates standardized trend and volume filters for signal validation.
 [p1_found, p1_raw_entry, p1_raw_sl, p1_ref_vol, p1_int_fails] = find_bull_flag()
 [p2_found, p2_raw_entry, p2_raw_sl, p2_ref_vol, p2_idx_a, p2_idx_b, p2_idx_c, p2_int_fails] = find_abcd()
 
 bool cond_green_bar = close > open
 bool cond_macd_ok = macd_line > 0 and (macd_hist > macd_hist[1] or macd_hist > 0)
-// This logic is kept for reference, but overridden below for stricter checking
 bool cond_vwap_ok = close > vwap_val
 
 float volume_check = volume
@@ -426,7 +422,7 @@ if barstate.isrealtime
     if time_elapsed > 0 and time_total > 0
         volume_check := volume * (time_total / time_elapsed)
 
-// --- PROCESS P1 ---
+// This section finalizes Bull Flag trade parameters by applying secondary filters and profit-potential thresholds.
 float p1_final_entry = p1_raw_entry
 float p1_risk = p1_final_entry - p1_raw_sl
 if p1_risk <= 0
@@ -434,36 +430,24 @@ if p1_risk <= 0
 float p1_tp = p1_final_entry + (p1_risk * 2)
 
 bool valid_p1 = p1_found
-bool p1_is_profitable = true
 
 if valid_p1
     int p1_total_fails = p1_int_fails
     if p1_use_macd and not cond_macd_ok
         p1_total_fails += 1
-    
-    // UPDATED: Breakout Volume is now a filter that adds to failures, not a hard block
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
         p1_total_fails += 1
-        
-    // FIXED: Compare ENTRY PRICE to VWAP, not current close.
-    // If the buy entry is below VWAP, it invalidates the setup immediately.
     if p1_use_vwap and p1_final_entry <= vwap_val
         valid_p1 := false
-        
     if p1_total_fails > p1_allowed_fails
         valid_p1 := false
-
     if p1_use_green and not cond_green_bar
         valid_p1 := false
     
-    // MODIFIED: Do not block, but flag as not profitable (Yellow mode)
-    if ((p1_tp - p1_final_entry) - commission_per_share) < 0.1
-        p1_is_profitable := false
-        // NEW: If user chose NOT to show low profit trades, kill the signal here
-        if not show_low_profit
-            valid_p1 := false
+    if not show_low_profit and ((p1_tp - p1_final_entry) - commission_per_share) < 0.1
+        valid_p1 := false
 
-// --- PROCESS P2 ---
+// This section calculates the final ABCD entry points and validates the setup against current market conditions and failure limits.
 float p2_final_entry = p2_raw_entry
 float p2_risk = p2_final_entry - p2_raw_sl
 if p2_risk <= 0
@@ -471,36 +455,24 @@ if p2_risk <= 0
 float p2_tp = p2_final_entry + (p2_risk * 2)
 
 bool valid_p2 = p2_found
-bool p2_is_profitable = true
 
 if valid_p2
     int p2_total_fails = p2_int_fails
     if p2_use_macd and not cond_macd_ok
         p2_total_fails += 1
-
-    // UPDATED: Breakout Volume is now a filter that adds to failures, not a hard block
     if p2_use_breakout_vol and volume_check <= p2_ref_vol
         p2_total_fails += 1
-
-    // FIXED: Compare ENTRY PRICE to VWAP, not current close.
-    // If the buy entry is below VWAP, it invalidates the setup immediately.
     if p2_use_vwap and p2_final_entry <= vwap_val
         valid_p2 := false
-
     if p2_total_fails > p2_allowed_fails
         valid_p2 := false
-
     if p2_use_green and not cond_green_bar
         valid_p2 := false
     
-    // MODIFIED: Do not block, but flag as not profitable (Yellow mode)
-    if ((p2_tp - p2_final_entry) - commission_per_share) < 0.25
-        p2_is_profitable := false
-        // NEW: If user chose NOT to show low profit trades, kill the signal here
-        if not show_low_profit
-            valid_p2 := false
+    if not show_low_profit and ((p2_tp - p2_final_entry) - commission_per_share) < 0.25
+        valid_p2 := false
 
-// --- PROCESS P3 (VWAP Break) ---
+// This logic identifies a VWAP Break setup by ensuring price stays below VWAP for a duration before triggering on a cross.
 bool valid_p3 = p3_enabled
 bool under_vwap_series = close < vwap_val
 float count_under = math.sum(under_vwap_series ? 1.0 : 0.0, p3_bars_required)
@@ -529,19 +501,13 @@ if p3_final_tp <= p3_final_entry
 // 8. GENERIC TRADE EXECUTION
 // ====================================
 
+// This loop manages the lifecycle of active trades by checking for price exits and updating visual indicators on the chart.
 float total_commission_cost = commission_per_share * trade_qty
 
-// --- MANAGE ACTIVE TRADES ---
-// This loop runs on every tick.
-// Since active_trades is 'var', it resets to empty at the start of every realtime tick.
-// We then re-populate it below in the Entry Logic. This sequence allows 0-delay updates.
 if active_trades.size() > 0
     for i = active_trades.size() - 1 to 0
         Trade t = active_trades.get(i)
         bool closed = false
-        
-        // FIXED: Only snap lines to bar_index IF the trade is closing.
-        // Otherwise, extend them into the future (bar_index + 5) so they remain visible during the bar.
         
         if low <= t.sl
             t.l_e.set_x2(bar_index)
@@ -549,22 +515,14 @@ if active_trades.size() > 0
             t.l_sl.set_x2(bar_index)
             t.b_risk.set_right(bar_index)
             
-            // LOGIC CHANGE: Only count towards P&L if it's a REAL trade
-            if t.is_real
-                cnt_loss := cnt_loss + 1
-                float gross_loss = (t.entry - t.sl) * trade_qty
-                net_profit := net_profit - (gross_loss + total_commission_cost)
+            cnt_loss := cnt_loss + 1
+            float gross_loss = (t.entry - t.sl) * trade_qty
+            net_profit := net_profit - (gross_loss + total_commission_cost)
             
             last_exit_bar := bar_index
             status_txt := "Stop Loss Hit"
             t.lbl.set_text("Lose\n" + t.pat)
-            
-            // VISUAL: If low profit trade (not real), keep it yellow, otherwise Red
-            if t.is_real
-                t.lbl.set_color(color.red)
-            else
-                t.lbl.set_color(color.yellow)
-                
+            t.lbl.set_color(color.red) 
             t.lbl.set_style(label.style_label_down)
             t.lbl.set_yloc(yloc.abovebar)
             closed := true
@@ -574,48 +532,36 @@ if active_trades.size() > 0
             t.l_sl.set_x2(bar_index)
             t.b_risk.set_right(bar_index)
             
-            // LOGIC CHANGE: Only count towards P&L if it's a REAL trade
-            if t.is_real
-                cnt_win := cnt_win + 1
-                float gross_profit = (t.tp - t.entry) * trade_qty
-                net_profit := net_profit + (gross_profit - total_commission_cost)
+            cnt_win := cnt_win + 1
+            float gross_profit = (t.tp - t.entry) * trade_qty
+            net_profit := net_profit + (gross_profit - total_commission_cost)
             
             last_exit_bar := bar_index
             status_txt := "Take Profit Hit"
             t.lbl.set_text("Win\n" + t.pat)
-            
-            // VISUAL: If low profit trade (not real), keep it yellow, otherwise Green
-            if t.is_real
-                t.lbl.set_color(color.green)
-            else
-                t.lbl.set_color(color.yellow)
-
+            t.lbl.set_color(color.green) 
             closed := true
         
         if closed
             active_trades.remove(i)
         else
-            // Active: Extend lines to ensure visibility during realtime ticks
             t.l_e.set_x2(bar_index + 5)
             t.l_tp.set_x2(bar_index + 5)
             t.l_sl.set_x2(bar_index + 5)
             t.b_risk.set_right(bar_index + 5)
 
-// --- TRADE LIMITS ---
+// This block calculates logic for trade frequency limits and cooldown bar requirements.
 int max_concurrent_trades = use_no_trade ? 1 : 999
 bool cond_cooldown = (bar_index - last_exit_bar) > cooldown_bars
 
 // ====================================
 // EXECUTION: PATTERN 1
 // ====================================
+// This section triggers entries for the Bull Flag pattern and handles the generation of alerts and visual chart objects.
 if time >= lookback_start_time
     bool p1_fresh_trigger = valid_p1 and high >= p1_final_entry
     bool p1_force_entry = p1_lock
     bool slots_available = active_trades.size() < max_concurrent_trades
-    
-    // We use 'var' for last_entry_bar so it resets on every tick of the realtime bar.
-    // This allows the condition 'bar_index != last_entry_bar' to remain TRUE on every tick,
-    // ensuring we re-enter this block and re-draw the table/lines instantly.
     bool can_enter = slots_available and (not use_cooldown or cond_cooldown) and bar_index != last_entry_bar
 
     if can_enter and (p1_fresh_trigger or p1_force_entry)
@@ -624,22 +570,18 @@ if time >= lookback_start_time
             p1_lock_entry := p1_final_entry
             p1_lock_sl := p1_raw_sl
             p1_lock_tp := p1_tp
-            p1_lock_real := p1_is_profitable // Lock the profit state
             alert("BUY SIGNAL | " + syminfo.ticker + " | Bull Flag", alert.freq_once_per_bar)
 
         float use_entry = p1_lock_entry
         float use_sl = p1_lock_sl
         float use_tp = p1_lock_tp
-        bool use_real = p1_lock_real
         last_entry_bar := bar_index
 
-        // VISUAL COLOR LOGIC
-        color c_main = use_real ? color.blue : color.yellow
-        color c_tp = use_real ? color.green : color.yellow
-        color c_sl = use_real ? color.red : color.yellow
-        color c_box = use_real ? color.teal : color.yellow
+        color c_main = color.blue
+        color c_tp = color.green
+        color c_sl = color.red
+        color c_box = color.teal
 
-        // FIX: Create lines extended + 5 bars
         line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=c_main, width=2)
         line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=c_tp, width=2)
         line l_sl_new = line.new(bar_index, use_sl, bar_index + 5, use_sl, color=c_sl, width=2)
@@ -652,7 +594,7 @@ if time >= lookback_start_time
         array.push(weekly_boxes, b_r_new)
         array.push(weekly_labels, lbl_new)
 
-        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "Bull Flag", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, use_real)
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "Bull Flag", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, true)
         active_trades.push(new_trade)
         status_txt := "Bull Flag ENTRY"
 
@@ -664,6 +606,7 @@ if time >= lookback_start_time
 // ====================================
 // EXECUTION: PATTERN 2
 // ====================================
+// This section triggers entries for the ABCD pattern and places markers for the A, B, and C pivot points.
 if time >= lookback_start_time
     bool p2_fresh_trigger = valid_p2 and high >= p2_final_entry
     bool p2_force_entry = p2_lock
@@ -676,20 +619,17 @@ if time >= lookback_start_time
             p2_lock_entry := p2_final_entry
             p2_lock_sl := p2_raw_sl
             p2_lock_tp := p2_tp
-            p2_lock_real := p2_is_profitable // Lock profit state
             alert("BUY SIGNAL | " + syminfo.ticker + " | ABCD", alert.freq_once_per_bar)
 
         float use_entry = p2_lock_entry
         float use_sl = p2_lock_sl
         float use_tp = p2_lock_tp
-        bool use_real = p2_lock_real
         last_entry_bar := bar_index
 
-        // VISUAL COLOR LOGIC
-        color c_main = use_real ? color.blue : color.yellow
-        color c_tp = use_real ? color.green : color.yellow
-        color c_sl = use_real ? color.red : color.yellow
-        color c_box = use_real ? color.teal : color.yellow
+        color c_main = color.blue
+        color c_tp = color.green
+        color c_sl = color.red
+        color c_box = color.teal
 
         line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=c_main, width=2)
         line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=c_tp, width=2)
@@ -710,7 +650,7 @@ if time >= lookback_start_time
         array.push(weekly_labels, l_b)
         array.push(weekly_labels, l_c)
 
-        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "ABCD", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, use_real)
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "ABCD", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, true)
         active_trades.push(new_trade)
         status_txt := "ABCD ENTRY"
 
@@ -722,6 +662,7 @@ if time >= lookback_start_time
 // ====================================
 // EXECUTION: PATTERN 3 (VWAP BREAK)
 // ====================================
+// This logic executes entries for the VWAP Break pattern and manages visual status updates during the entry process.
 if time >= lookback_start_time
     bool p3_fresh_trigger = valid_p3
     bool p3_force_entry = p3_lock
@@ -753,7 +694,6 @@ if time >= lookback_start_time
         array.push(weekly_boxes, b_r_new)
         array.push(weekly_labels, lbl_new)
 
-        // P3 is always "Real" as there is no profit filter in this script for P3
         Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "VWAP Break", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, true)
         active_trades.push(new_trade)
         status_txt := "VWAP Break ENTRY"
@@ -768,6 +708,7 @@ if time >= lookback_start_time
 // 9. DASHBOARD
 // ====================================
 
+// This final block creates and updates an on-screen table to display current trade stats, performance metrics, and active trade values.
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
 
 if barstate.islast
@@ -786,12 +727,17 @@ if barstate.islast
     int active_cnt = active_trades.size()
     bool cooling_down = active_cnt == 0 and (bar_index - last_exit_bar) <= cooldown_bars
     string display_status = active_cnt > 0 ? "Active: " + str.tostring(active_cnt) : (cooling_down ? "Cooldown..." : status_txt)
-    color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
+    color stat_col = active_cnt > 0 ? color.orange : (status_txt == "Take Profit Hit" ? color.green : color.white)
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
-    // --- UPDATED LINE BELOW: ROUNDING TO INTEGER ---
     string profit_txt = str.tostring(math.round(net_profit)) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
+    
+    float total_trades = cnt_win + cnt_loss
+    float win_pct = total_trades > 0 ? (cnt_win / total_trades) * 100 : 0.0
+    string win_pct_txt = "Win: " + str.tostring(win_pct, "0.0") + "%"
+    table.cell(dashboard, 0, 3, win_pct_txt, text_color=color.white)
+
     table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
     table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
 
@@ -799,5 +745,4 @@ if barstate.islast
     table.cell(dashboard, 2, 3, d_sl, text_color=color.white, text_halign=text.align_right)
 
     table.merge_cells(dashboard, 1, 0, 2, 0)
-    table.merge_cells(dashboard, 0, 2, 0, 3)
     table.merge_cells(dashboard, 3, 1, 3, 3)
