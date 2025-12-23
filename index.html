@@ -416,6 +416,7 @@ find_abcd() =>
 
 bool cond_green_bar = close > open
 bool cond_macd_ok = macd_line > 0 and (macd_hist > macd_hist[1] or macd_hist > 0)
+// This logic is kept for reference, but overridden below for stricter checking
 bool cond_vwap_ok = close > vwap_val
 
 float volume_check = volume
@@ -444,7 +445,9 @@ if valid_p1
     if p1_use_breakout_vol and volume_check <= p1_ref_vol
         p1_total_fails += 1
         
-    if p1_use_vwap and not cond_vwap_ok
+    // FIXED: Compare ENTRY PRICE to VWAP, not current close.
+    // If the buy entry is below VWAP, it invalidates the setup immediately.
+    if p1_use_vwap and p1_final_entry <= vwap_val
         valid_p1 := false
         
     if p1_total_fails > p1_allowed_fails
@@ -479,7 +482,9 @@ if valid_p2
     if p2_use_breakout_vol and volume_check <= p2_ref_vol
         p2_total_fails += 1
 
-    if p2_use_vwap and not cond_vwap_ok
+    // FIXED: Compare ENTRY PRICE to VWAP, not current close.
+    // If the buy entry is below VWAP, it invalidates the setup immediately.
+    if p2_use_vwap and p2_final_entry <= vwap_val
         valid_p2 := false
 
     if p2_total_fails > p2_allowed_fails
