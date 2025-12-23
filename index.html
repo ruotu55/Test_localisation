@@ -784,7 +784,8 @@ if barstate.islast
     color stat_col = active_cnt > 0 ? color.yellow : (status_txt == "Take Profit Hit" ? color.green : color.white)
     table.cell(dashboard, 3, 1, display_status, text_color=stat_col)
     color profit_bg = net_profit >= 0 ? color.new(color.green, 60) : color.new(color.red, 60)
-    string profit_txt = str.tostring(net_profit, format.mintick) + "$"
+    // --- UPDATED LINE BELOW: ROUNDING TO INTEGER ---
+    string profit_txt = str.tostring(math.round(net_profit)) + "$"
     table.cell(dashboard, 0, 2, profit_txt, bgcolor=profit_bg, text_color=color.white)
     table.cell(dashboard, 1, 2, "Entry:", text_color=color.blue, text_halign=text.align_left)
     table.cell(dashboard, 2, 2, d_entry, text_color=color.white, text_halign=text.align_right)
