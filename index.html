@@ -7,6 +7,7 @@ indicator("Rom Master - Multi-Pattern Strategy", overlay=true)
 
 // --- MANDATORY EXECUTION RULES (TOP PRIORITY) ---
 bool use_no_trade = input.bool(false, "BLOCK ENTRY IF TRADE ACTIVE?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Strictly 1 trade at a time.\nOFF = Allows unlimited trades (Stacking).")
+bool show_low_profit = input.bool(true, "SHOW LOW PROFIT TRADES (YELLOW)?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Shows trades with low profit potential in YELLOW (ignored in P&L).\nOFF = Completely hides these trades.")
 bool use_cooldown = input.bool(false, "PAUSE AFTER TRADE (COOLDOWN)?", group="═════ MANDATORY EXECUTION RULES ═════", tooltip="ON = Wait for the 'Cooldown Bars' duration after a trade finishes before looking for new setups.")
 int cooldown_bars = input.int(2, "Cooldown Duration (Bars)", group="═════ MANDATORY EXECUTION RULES ═════")
 
@@ -53,6 +54,7 @@ type Trade
     line l_sl
     box b_risk
     label lbl
+    bool is_real // Added to track if this counts towards P&L
 
 // --- PERSISTENCE LOCKS ---
 // We use varip here to REMEMBER the signal across realtime ticks
@@ -60,16 +62,19 @@ varip bool p1_lock = false
 varip float p1_lock_entry = 0.0
 varip float p1_lock_sl = 0.0
 varip float p1_lock_tp = 0.0
+varip bool p1_lock_real = true // Lock for profit status
 
 varip bool p2_lock = false
 varip float p2_lock_entry = 0.0
 varip float p2_lock_sl = 0.0
 varip float p2_lock_tp = 0.0
+varip bool p2_lock_real = true // Lock for profit status
 
 varip bool p3_lock = false
 varip float p3_lock_entry = 0.0
 varip float p3_lock_sl = 0.0
 varip float p3_lock_tp = 0.0
+// P3 doesn't have a profit filter in original code, so it's always real
 
 if barstate.isnew
     p1_lock := false
@@ -428,6 +433,7 @@ if p1_risk <= 0
 float p1_tp = p1_final_entry + (p1_risk * 2)
 
 bool valid_p1 = p1_found
+bool p1_is_profitable = true
 
 if valid_p1
     int p1_total_fails = p1_int_fails
@@ -446,8 +452,13 @@ if valid_p1
 
     if p1_use_green and not cond_green_bar
         valid_p1 := false
+    
+    // MODIFIED: Do not block, but flag as not profitable (Yellow mode)
     if ((p1_tp - p1_final_entry) - commission_per_share) < 0.1
-        valid_p1 := false
+        p1_is_profitable := false
+        // NEW: If user chose NOT to show low profit trades, kill the signal here
+        if not show_low_profit
+            valid_p1 := false
 
 // --- PROCESS P2 ---
 float p2_final_entry = p2_raw_entry
@@ -457,6 +468,7 @@ if p2_risk <= 0
 float p2_tp = p2_final_entry + (p2_risk * 2)
 
 bool valid_p2 = p2_found
+bool p2_is_profitable = true
 
 if valid_p2
     int p2_total_fails = p2_int_fails
@@ -475,8 +487,13 @@ if valid_p2
 
     if p2_use_green and not cond_green_bar
         valid_p2 := false
+    
+    // MODIFIED: Do not block, but flag as not profitable (Yellow mode)
     if ((p2_tp - p2_final_entry) - commission_per_share) < 0.25
-        valid_p2 := false
+        p2_is_profitable := false
+        // NEW: If user chose NOT to show low profit trades, kill the signal here
+        if not show_low_profit
+            valid_p2 := false
 
 // --- PROCESS P3 (VWAP Break) ---
 bool valid_p3 = p3_enabled
@@ -526,13 +543,23 @@ if active_trades.size() > 0
             t.l_tp.set_x2(bar_index)
             t.l_sl.set_x2(bar_index)
             t.b_risk.set_right(bar_index)
-            cnt_loss := cnt_loss + 1
-            float gross_loss = (t.entry - t.sl) * trade_qty
-            net_profit := net_profit - (gross_loss + total_commission_cost)
+            
+            // LOGIC CHANGE: Only count towards P&L if it's a REAL trade
+            if t.is_real
+                cnt_loss := cnt_loss + 1
+                float gross_loss = (t.entry - t.sl) * trade_qty
+                net_profit := net_profit - (gross_loss + total_commission_cost)
+            
             last_exit_bar := bar_index
             status_txt := "Stop Loss Hit"
             t.lbl.set_text("Lose\n" + t.pat)
-            t.lbl.set_color(color.red)
+            
+            // VISUAL: If low profit trade (not real), keep it yellow, otherwise Red
+            if t.is_real
+                t.lbl.set_color(color.red)
+            else
+                t.lbl.set_color(color.yellow)
+                
             t.lbl.set_style(label.style_label_down)
             t.lbl.set_yloc(yloc.abovebar)
             closed := true
@@ -541,13 +568,23 @@ if active_trades.size() > 0
             t.l_tp.set_x2(bar_index)
             t.l_sl.set_x2(bar_index)
             t.b_risk.set_right(bar_index)
-            cnt_win := cnt_win + 1
-            float gross_profit = (t.tp - t.entry) * trade_qty
-            net_profit := net_profit + (gross_profit - total_commission_cost)
+            
+            // LOGIC CHANGE: Only count towards P&L if it's a REAL trade
+            if t.is_real
+                cnt_win := cnt_win + 1
+                float gross_profit = (t.tp - t.entry) * trade_qty
+                net_profit := net_profit + (gross_profit - total_commission_cost)
+            
             last_exit_bar := bar_index
             status_txt := "Take Profit Hit"
             t.lbl.set_text("Win\n" + t.pat)
-            t.lbl.set_color(color.green)
+            
+            // VISUAL: If low profit trade (not real), keep it yellow, otherwise Green
+            if t.is_real
+                t.lbl.set_color(color.green)
+            else
+                t.lbl.set_color(color.yellow)
+
             closed := true
         
         if closed
@@ -582,19 +619,27 @@ if time >= lookback_start_time
             p1_lock_entry := p1_final_entry
             p1_lock_sl := p1_raw_sl
             p1_lock_tp := p1_tp
+            p1_lock_real := p1_is_profitable // Lock the profit state
             alert("BUY SIGNAL | " + syminfo.ticker + " | Bull Flag", alert.freq_once_per_bar)
 
         float use_entry = p1_lock_entry
         float use_sl = p1_lock_sl
         float use_tp = p1_lock_tp
+        bool use_real = p1_lock_real
         last_entry_bar := bar_index
 
+        // VISUAL COLOR LOGIC
+        color c_main = use_real ? color.blue : color.yellow
+        color c_tp = use_real ? color.green : color.yellow
+        color c_sl = use_real ? color.red : color.yellow
+        color c_box = use_real ? color.teal : color.yellow
+
         // FIX: Create lines extended + 5 bars
-        line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=color.blue, width=2)
-        line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=color.green, width=2)
-        line l_sl_new = line.new(bar_index, use_sl, bar_index + 5, use_sl, color=color.red, width=2)
-        box b_r_new = box.new(bar_index, use_tp, bar_index + 5, use_sl, bgcolor=color.new(color.teal, 85), border_color=color.teal)
-        label lbl_new = label.new(bar_index, low, "BUY\nBull Flag", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
+        line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=c_main, width=2)
+        line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=c_tp, width=2)
+        line l_sl_new = line.new(bar_index, use_sl, bar_index + 5, use_sl, color=c_sl, width=2)
+        box b_r_new = box.new(bar_index, use_tp, bar_index + 5, use_sl, bgcolor=color.new(c_box, 85), border_color=c_box)
+        label lbl_new = label.new(bar_index, low, "BUY\nBull Flag", color=c_main, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
 
         array.push(weekly_lines, l_e_new)
         array.push(weekly_lines, l_tp_new)
@@ -602,7 +647,7 @@ if time >= lookback_start_time
         array.push(weekly_boxes, b_r_new)
         array.push(weekly_labels, lbl_new)
 
-        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "Bull Flag", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new)
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "Bull Flag", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, use_real)
         active_trades.push(new_trade)
         status_txt := "Bull Flag ENTRY"
 
@@ -626,18 +671,26 @@ if time >= lookback_start_time
             p2_lock_entry := p2_final_entry
             p2_lock_sl := p2_raw_sl
             p2_lock_tp := p2_tp
+            p2_lock_real := p2_is_profitable // Lock profit state
             alert("BUY SIGNAL | " + syminfo.ticker + " | ABCD", alert.freq_once_per_bar)
 
         float use_entry = p2_lock_entry
         float use_sl = p2_lock_sl
         float use_tp = p2_lock_tp
+        bool use_real = p2_lock_real
         last_entry_bar := bar_index
 
-        line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=color.blue, width=2)
-        line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=color.green, width=2)
-        line l_sl_new = line.new(bar_index, use_sl, bar_index + 5, use_sl, color=color.red, width=2)
-        box b_r_new = box.new(bar_index, use_tp, bar_index + 5, use_sl, bgcolor=color.new(color.teal, 85), border_color=color.teal)
-        label lbl_new = label.new(bar_index, low, "BUY\nABCD", color=color.blue, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
+        // VISUAL COLOR LOGIC
+        color c_main = use_real ? color.blue : color.yellow
+        color c_tp = use_real ? color.green : color.yellow
+        color c_sl = use_real ? color.red : color.yellow
+        color c_box = use_real ? color.teal : color.yellow
+
+        line l_e_new = line.new(bar_index, use_entry, bar_index + 5, use_entry, color=c_main, width=2)
+        line l_tp_new = line.new(bar_index, use_tp, bar_index + 5, use_tp, color=c_tp, width=2)
+        line l_sl_new = line.new(bar_index, use_sl, bar_index + 5, use_sl, color=c_sl, width=2)
+        box b_r_new = box.new(bar_index, use_tp, bar_index + 5, use_sl, bgcolor=color.new(c_box, 85), border_color=c_box)
+        label lbl_new = label.new(bar_index, low, "BUY\nABCD", color=c_main, textcolor=color.white, style=label.style_label_up, yloc=yloc.belowbar, text_formatting=text.format_bold)
 
         array.push(weekly_lines, l_e_new)
         array.push(weekly_lines, l_tp_new)
@@ -652,7 +705,7 @@ if time >= lookback_start_time
         array.push(weekly_labels, l_b)
         array.push(weekly_labels, l_c)
 
-        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "ABCD", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new)
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "ABCD", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, use_real)
         active_trades.push(new_trade)
         status_txt := "ABCD ENTRY"
 
@@ -695,7 +748,8 @@ if time >= lookback_start_time
         array.push(weekly_boxes, b_r_new)
         array.push(weekly_labels, lbl_new)
 
-        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "VWAP Break", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new)
+        // P3 is always "Real" as there is no profit filter in this script for P3
+        Trade new_trade = Trade.new(use_entry, use_sl, use_tp, "VWAP Break", l_e_new, l_tp_new, l_sl_new, b_r_new, lbl_new, true)
         active_trades.push(new_trade)
         status_txt := "VWAP Break ENTRY"
     
@@ -712,7 +766,7 @@ if time >= lookback_start_time
 var table dashboard = table.new(position.top_right, 4, 4, color.new(color.black, 80), color.white, 1, color.white, 1)
 
 if barstate.islast
-    Trade last_t = active_trades.size() > 0 ? active_trades.get(active_trades.size() - 1) : Trade.new(na, na, na, "", line(na), line(na), line(na), box(na), label(na))
+    Trade last_t = active_trades.size() > 0 ? active_trades.get(active_trades.size() - 1) : Trade.new(na, na, na, "", line(na), line(na), line(na), box(na), label(na), false)
     string d_tp = na(last_t.tp) ? "0.00" : str.tostring(last_t.tp, format.mintick)
     string d_entry = na(last_t.entry) ? "0.00" : str.tostring(last_t.entry, format.mintick)
     string d_sl = na(last_t.sl) ? "0.00" : str.tostring(last_t.sl, format.mintick)
